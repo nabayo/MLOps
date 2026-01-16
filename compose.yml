@@ -1,0 +1,7 @@
+services :
+  app:
+    build: # on build l' img ici
+      context: . # depuis la racine de notre projet (pour dire où chercher)
+      dockerfile: Dockerfile
+    volumes:
+      - ./dataset/:/app/dataset/  # pour mapper le dataset qu'on a en local
