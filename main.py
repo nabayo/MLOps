@@ -4,6 +4,8 @@ from PIL import Image
 def main():
     print_hello_world()
     
+    print("hello!")
+    
     image = Image.open("dataset/image.jpg")
     print(f"Image size: {image.size}")
     
