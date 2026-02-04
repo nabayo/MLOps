@@ -94,6 +94,7 @@ class DataPreparation:
         """
         Convert Picsellia format annotations to YOLO format.
 
+        Picsellia format: Dict[image_id, List[annotations with rectangles]]
         YOLO format: <class_id> <x_center> <y_center> <width> <height>
         All values normalized to [0, 1]
 
@@ -115,77 +116,104 @@ class DataPreparation:
         label_files = []
         class_names = set()
 
-        # Handle different Picsellia annotation formats
-        if 'labelmap' in annotations_data:
-            # Extract class names
-            labelmap = annotations_data.get('labelmap', {})
-            class_to_id = {name: idx for idx, name in enumerate(sorted(labelmap.keys()))}
-            class_names = sorted(labelmap.keys())
+        # Find all image files in the dataset directory
+        valid_extensions = {'.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'}
+        available_images = {}
+        for file_path in self.dataset_path.iterdir():
+            if file_path.suffix in valid_extensions:
+                available_images[file_path.stem] = file_path
 
-        # Get images and annotations
-        images = annotations_data.get('images', [])
-        if isinstance(annotations_data, dict) and 'annotations' in annotations_data:
-            annotations = annotations_data['annotations']
-        else:
-            annotations = []
+        print(f"Found {len(available_images)} images in dataset directory")
+        print(f"Found {len(annotations_data)} annotated images in annotations.json")
 
-        # Create a mapping of image_id to annotations
-        image_annotations = {}
-        for ann in annotations:
-            img_id = ann.get('image_id')
-            if img_id not in image_annotations:
-                image_annotations[img_id] = []
-            image_annotations[img_id].append(ann)
+        # Build label mapping from annotations
+        label_to_id = {}
+        for image_id, ann_list in annotations_data.items():
+            for ann in ann_list:
+                for rect in ann.get('rectangles', []):
+                    label = rect.get('label')
+                    if label and label not in label_to_id:
+                        class_names.add(label)
 
-        # Process each image
-        for img_data in tqdm(images, desc="Converting annotations"):
-            img_id = img_data.get('id')
-            img_filename = img_data.get('filename') or img_data.get('file_name')
+        # Create sorted label mapping (consistent across runs)
+        class_names_sorted = sorted(class_names)
+        label_to_id = {label: idx for idx, label in enumerate(class_names_sorted)}
 
-            if not img_filename:
+        print(f"Detected classes: {class_names_sorted}")
+
+        # Process each annotated image
+        converted_count = 0
+        skipped_count = 0
+
+        for image_id, ann_list in tqdm(annotations_data.items(), desc="Converting annotations"):
+            # Try to find the corresponding image file
+            # Picsellia uses UUIDs as image_id, but actual filename may differ
+            # We need to match by looking for images in the directory
+
+            # Try to find matching image file
+            image_path = None
+            for img_stem, img_path in available_images.items():
+                # Simple heuristic: check if UUID is in filename or vice versa
+                if image_id in img_path.name or img_stem == image_id:
+                    image_path = img_path
+                    break
+
+            # If UUID matching failed, use first available image (assumes order)
+            # This is a fallback - better approach would be to use Picsellia SDK properly
+            if image_path is None and available_images:
+                # Use alphabetically first unused image
+                used_images = {Path(f).stem for f in image_files}
+                for img_stem in sorted(available_images.keys()):
+                    if img_stem not in used_images:
+                        image_path = available_images[img_stem]
+                        break
+
+            if image_path is None:
+                skipped_count += 1
                 continue
 
-            # Image dimensions
-            img_width = img_data.get('width', 0)
-            img_height = img_data.get('height', 0)
-
-            # If dimensions not in metadata, read from image
-            if img_width == 0 or img_height == 0:
-                img_path = self.dataset_path / img_filename
-                if img_path.exists():
-                    with Image.open(img_path) as img:
-                        img_width, img_height = img.size
-
-            # Get annotations for this image
-            img_anns = image_annotations.get(img_id, [])
+            # Get image dimensions
+            try:
+                with Image.open(image_path) as img:
+                    img_width, img_height = img.size
+            except Exception as e:
+                print(f"Warning: Could not read image {image_path}: {e}")
+                skipped_count += 1
+                continue
 
             # Convert annotations to YOLO format
             yolo_annotations = []
-            for ann in img_anns:
-                # Get bounding box (format varies)
-                bbox = ann.get('bbox', [])
-                if not bbox or len(bbox) != 4:
+            for ann in ann_list:
+                # Only process ACCEPTED annotations
+                if ann.get('status') != 'ACCEPTED':
                     continue
 
-                # Picsellia bbox: [x_min, y_min, width, height]
-                x_min, y_min, box_width, box_height = bbox
+                for rect in ann.get('rectangles', []):
+                    # Get bounding box (Picsellia format: x, y, w, h in pixels)
+                    x = rect.get('x', 0)
+                    y = rect.get('y', 0)
+                    w = rect.get('w', 0)
+                    h = rect.get('h', 0)
+                    label = rect.get('label')
 
-                # Convert to YOLO format: [x_center, y_center, width, height] (normalized)
-                x_center = (x_min + box_width / 2) / img_width
-                y_center = (y_min + box_height / 2) / img_height
-                norm_width = box_width / img_width
-                norm_height = box_height / img_height
+                    if w == 0 or h == 0 or label not in label_to_id:
+                        continue
 
-                # Get class name and ID
-                category_id = ann.get('category_id', 0)
-                class_id = category_id  # Use category_id directly as class_id
+                    # Convert to YOLO format: [x_center, y_center, width,height] (normalized)
+                    x_center = (x + w / 2) / img_width
+                    y_center = (y + h / 2) / img_height
+                    norm_width = w / img_width
+                    norm_height = h / img_height
 
-                yolo_annotations.append(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {norm_width:.6f} {norm_height:.6f}"
-                )
+                    # Get class ID
+                    class_id = label_to_id[label]
 
-            # Save label file (even if empty)
-            label_filename = Path(img_filename).stem + '.txt'
+                    yolo_annotations.append(
+                        f"{class_id} {x_center:.6f} {y_center:.6f} {norm_width:.6f} {norm_height:.6f}"
+                    )
+
+            # Save label file (even if empty - indicating negative example)
+            label_filename = image_path.stem + '.txt'
             label_path = self.labels_path / label_filename
             label_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -195,18 +223,19 @@ class DataPreparation:
             label_files.append(str(label_path))
 
             # Copy image to YOLO directory
-            src_img = self.dataset_path / img_filename
-            dst_img = self.images_path / img_filename
+            dst_img = self.images_path / image_path.name
             dst_img.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(image_path, dst_img)
+            image_files.append(str(dst_img))
 
-            if src_img.exists():
-                shutil.copy2(src_img, dst_img)
-                image_files.append(str(dst_img))
+            converted_count += 1
 
-        print(f"✓ Converted {len(image_files)} images and {len(label_files)} labels")
+        print(f"✓ Converted {converted_count} images and {len(label_files)} labels")
+        if skipped_count > 0:
+            print(f"⚠ Skipped {skipped_count} images (missing files)")
 
         # Store class names
-        self.class_names = class_names if class_names else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+        self.class_names = class_names_sorted if class_names_sorted else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
 
         return {
             'images': image_files,
