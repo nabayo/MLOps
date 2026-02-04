@@ -392,9 +392,9 @@ MLFLOW_TRACKING_URI=http://localhost:5000 python serving/api.py
 cd frontend && python -m http.server 8080
 ```
 
-### Adding YOLO26 Support (Future)
+### Adding YOLO26 Support
 
-When YOLO26 is released, simply update `src/training.py`:
+To add YOLO26, simply update `src/training.py`:
 
 ```python
 model_map = {
