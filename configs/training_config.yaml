@@ -6,7 +6,7 @@
 model:
   # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
   # Easily extensible for future versions (e.g., yolo26n when available)
-  architecture: "yolo11n"  # Nano for >10 FPS
+  architecture: "yolo26n"  # Nano for >10 FPS
   
   # Pretrained weights (set to null to train from scratch)
   pretrained: true
@@ -26,7 +26,7 @@ dataset:
   seed: 42
   
   # Image size for training (must be multiple of 32)
-  img_size: 640
+  img_size: 480
   
   # Auto-generate data.yaml if not present
   auto_generate_config: true
@@ -36,7 +36,7 @@ dataset:
 # =====================
 training:
   # Number of epochs
-  epochs: 10
+  epochs: 100
   
   # Batch size (adjust based on GPU memory)
   batch_size: 8
@@ -119,15 +119,15 @@ augmentation:
 # =====================
 mlflow:
   # Experiment name
-  experiment_name: "yolov11-finger-counting"
+  experiment_name: "yolov26-nano-finger-counting"
   
   # Run name prefix (will be suffixed with timestamp)
-  run_name_prefix: "yolo11n-train"
+  run_name_prefix: "yolo26n-train"
   
   # Tags to add to the run
   tags:
     project: "MLOps Finger Counting"
-    framework: "Ultralytics YOLOv11"
+    framework: "Ultralytics YOLOv26"
     task: "object-detection"
     dataset: "finger-counting"
   
@@ -141,7 +141,7 @@ mlflow:
   monitor_metric: "metrics/mAP50-95(B)"
   
   # Model registry name
-  registered_model_name: "yolov11-finger-counting"
+  registered_model_name: "yolov26-nano-finger-counting"
   
   # Auto-register best model
   auto_register: true

@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+
+# Install Python dependencies with pip cache mount for faster rebuilds
+# --mount=type=cache uses BuildKit cache to persist pip cache between builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ src/
