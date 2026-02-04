@@ -17,10 +17,10 @@ if errorlevel 1 (
 
 REM Start serving API
 echo [*] Building serving image...
-docker-compose build serving
+docker-compose build serving frontend
 
 echo [*] Starting serving API...
-docker-compose up -d serving
+docker-compose up -d serving frontend
 
 echo.
 echo ================================
@@ -33,4 +33,4 @@ echo.
 echo Test the API:
 echo   curl http://localhost:8000/health
 echo.
-echo To stop: docker-compose stop serving
+echo To stop: docker-compose stop serving frontend

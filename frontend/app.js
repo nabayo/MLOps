@@ -7,6 +7,8 @@
  * - Experiments dashboard with metrics
  */
 
+console.log('APP.JS LOADED - VERSION 3 - WITH DETAILED LOGGING', 'background: #222; color: #bada55; font-size: 16px; font-weight: bold;');
+
 // Configuration
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -134,19 +136,25 @@ function startInference() {
 
 async function runInference(video) {
     const startTime = performance.now();
+    console.log('🎬 [INFERENCE] Starting inference...');
 
     try {
         // Capture frame from video
+        console.log('📷 [INFERENCE] Capturing frame from video...');
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0);
+        console.log(`📷 [INFERENCE] Frame captured: ${canvas.width}x${canvas.height}`);
 
         // Convert to blob
+        console.log('🔄 [INFERENCE] Converting to blob...');
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+        console.log(`🔄 [INFERENCE] Blob created: ${blob.size} bytes`);
 
         // Send to API
+        console.log('📡 [INFERENCE] Sending to API...');
         const formData = new FormData();
         formData.append('file', blob, 'frame.jpg');
 
@@ -155,23 +163,67 @@ async function runInference(video) {
             body: formData
         });
 
+        console.log(`📡 [INFERENCE] Response status: ${response.status}`);
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('📦 [INFERENCE] Response data:', {
+            finger_count: data.finger_count,
+            predictions: data.predictions?.length || 0,
+            preprocessing_applied: data.preprocessing_applied,
+            inference_time_ms: data.inference_time_ms,
+            has_processed_image: !!data.processed_image,
+            processed_image_length: data.processed_image?.length || 0
+        });
+
+        // If backend returned a processed image, display it
+        if (data.processed_image) {
+            console.log('🖼️ [DISPLAY] Processed image found, displaying...');
+            const displayCanvas = document.getElementById('canvas');
+            const displayCtx = displayCanvas.getContext('2d');
+
+            console.log(`🖼️ [DISPLAY] Canvas element: ${displayCanvas.width}x${displayCanvas.height}`);
+
+            const img = new Image();
+            img.onload = () => {
+                console.log('✅ [DISPLAY] Image loaded successfully');
+                // Clear canvas
+                displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+
+                // Draw processed (blurred) image
+                displayCtx.drawImage(img, 0, 0, displayCanvas.width, displayCanvas.height);
+                console.log('✅ [DISPLAY] Blurred image drawn to canvas');
+
+                // Draw predictions on top of processed image
+                drawPredictionsOnContext(displayCtx, data.predictions);
+                console.log('✅ [DISPLAY] Predictions drawn');
+            };
+            img.onerror = (e) => {
+                console.error('❌ [DISPLAY] Failed to load image:', e);
+            };
+            img.src = 'data:image/jpeg;base64,' + data.processed_image;
+            console.log('🖼️ [DISPLAY] Image source set, waiting for onload...');
+        } else {
+            console.warn('⚠️ [DISPLAY] No processed image in response, using raw video');
+            // No processed image, just draw predictions on overlay canvas
+            drawPredictions(data.predictions);
+        }
 
         // Update displays
         updateFingerCount(data.finger_count);
         updatePredictionsList(data.predictions);
-        drawPredictions(data.predictions);
 
         // Update latency
         const latency = performance.now() - startTime;
         document.getElementById('latency').textContent = `Latency: ${Math.round(latency)}ms`;
+        console.log(`⏱️ [INFERENCE] Complete in ${Math.round(latency)}ms`);
 
     } catch (error) {
-        console.error('Inference error:', error);
+        console.error('❌ [INFERENCE] Error:', error);
+        console.error('❌ [INFERENCE] Stack:', error.stack);
         // Don't show toast for every error to avoid spam
     }
 }
@@ -185,6 +237,11 @@ function drawPredictions(predictions) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw each prediction
+    drawPredictionsOnContext(ctx, predictions);
+}
+
+function drawPredictionsOnContext(ctx, predictions) {
+    // Draw each prediction on the given context
     predictions.forEach(pred => {
         const [x1, y1, x2, y2] = pred.bbox;
         const width = x2 - x1;

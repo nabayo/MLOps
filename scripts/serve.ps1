@@ -15,22 +15,29 @@ if (-not $mlflowRunning) {
     Start-Sleep -Seconds 5
 }
 
-# Start serving API
-Write-Host "[*] Building serving image..." -ForegroundColor Cyan
-docker-compose build serving
+# Check if serving image exists
+$imageExists = docker images | Select-String "mlops-serving"
+
+if (-not $imageExists) {
+    Write-Host "[*] Building serving image (first time)..." -ForegroundColor Cyan
+    docker-compose build serving frontend
+} else {
+    Write-Host "[OK] Serving image exists, skipping build" -ForegroundColor Green
+    Write-Host "     To rebuild: docker-compose build serving" -ForegroundColor Gray
+}
 
 Write-Host "[*] Starting serving API..." -ForegroundColor Green
-docker-compose up -d serving
+docker-compose up -d serving frontend
 
 Write-Host ""
 Write-Host "================================" -ForegroundColor Green
 Write-Host "  Serving API is running!"
 Write-Host "================================" -ForegroundColor Green
-Write-Host "[POINT] API endpoint: http://localhost:8000"
-Write-Host "[DOCS]  API docs:     http://localhost:8000/docs"
-Write-Host "[UI]    MLflow UI:    http://localhost:5000"
+Write-Host "API endpoint: http://localhost:8000"
+Write-Host "API docs:     http://localhost:8000/docs"
+Write-Host "MLflow UI:    http://localhost:5000"
 Write-Host ""
-Write-Host "[INFO] Test the API:" -ForegroundColor Yellow
+Write-Host "Test the API:" -ForegroundColor Yellow
 Write-Host "   curl http://localhost:8000/health"
 Write-Host ""
-Write-Host "[STOP] To stop: docker-compose stop serving" -ForegroundColor Gray
+Write-Host "To stop: docker-compose stop serving frontend" -ForegroundColor Gray

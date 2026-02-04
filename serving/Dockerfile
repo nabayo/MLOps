@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements FIRST (before source code) for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install -r requirements.txt
+# Install Python dependencies with pip cache mount for faster rebuilds
+# --mount=type=cache uses BuildKit cache to persist pip cache between builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ src/

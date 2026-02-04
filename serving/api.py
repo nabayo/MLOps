@@ -12,6 +12,7 @@ Features:
 import os
 import io
 import json
+import base64
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -81,6 +82,7 @@ class PredictionResponse(BaseModel):
     predictions: List[PredictionBox]
     preprocessing_applied: bool
     inference_time_ms: float
+    processed_image: Optional[str] = None  # Base64 encoded processed image
 
 
 class ExperimentInfo(BaseModel):
@@ -501,11 +503,19 @@ async def predict(file: UploadFile = File(...)):
 
         print(f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms")
 
+        # Encode processed image as base64 for frontend display
+        processed_image_b64 = None
+        if preprocessing_applied:
+            # Encode the processed image
+            _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            processed_image_b64 = base64.b64encode(buffer).decode('utf-8')
+
         return PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
             preprocessing_applied=preprocessing_applied,
-            inference_time_ms=round(inference_time, 2)
+            inference_time_ms=round(inference_time, 2),
+            processed_image=processed_image_b64
         )
 
     except HTTPException:
