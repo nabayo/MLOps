@@ -245,10 +245,21 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
         return image
 
     # For now, use fast face blur with OpenCV (deface is too slow for API)
-    from src.preprocessing import FastFaceBlurStep
-
-    blur_step = FastFaceBlurStep(blur_kernel_size=51)
-    return blur_step.process(image)
+    try:
+        # Add parent directory to path if not already there
+        import sys
+        from pathlib import Path
+        parent_dir = str(Path(__file__).parent.parent)
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        
+        from src.preprocessing import FastFaceBlurStep
+        blur_step = FastFaceBlurStep(blur_kernel_size=51)
+        return blur_step.process(image)
+    except ImportError as e:
+        print(f"Warning: Could not import preprocessing module: {e}")
+        # Fallback to simple Gaussian blur if module not found
+        return cv2.GaussianBlur(image, (51, 51), 0)
 
 
 # API Endpoints
@@ -420,19 +431,33 @@ async def predict(file: UploadFile = File(...)):
         # Preprocessing
         preprocessing_applied = False
         if preprocessing_enabled:
-            image = preprocess_image(image)
-            preprocessing_applied = True
+            print(f"🔄 Preprocessing enabled, applying face blur...")
+            try:
+                image = preprocess_image(image)
+                preprocessing_applied = True
+                print(f"✓ Preprocessing applied successfully")
+            except Exception as prep_error:
+                print(f"⚠ Preprocessing failed: {prep_error}")
+                # Continue without preprocessing
+                import traceback
+                traceback.print_exc()
 
         # Run inference
         import time
         start_time = time.time()
 
-        results = current_model.predict(
-            image,
-            conf=0.25,
-            iou=0.7,
-            verbose=False
-        )
+        try:
+            results = current_model.predict(
+                image,
+                conf=0.25,
+                iou=0.7,
+                verbose=False
+            )
+        except Exception as inf_error:
+            print(f"❌ Inference failed: {inf_error}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Inference failed: {str(inf_error)}")
 
         inference_time = (time.time() - start_time) * 1000
 
@@ -474,6 +499,8 @@ async def predict(file: UploadFile = File(...)):
                     except:
                         finger_count += 1  # Fallback
 
+        print(f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms")
+
         return PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
@@ -481,7 +508,12 @@ async def predict(file: UploadFile = File(...)):
             inference_time_ms=round(inference_time, 2)
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Prediction error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 

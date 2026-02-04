@@ -392,31 +392,6 @@ MLFLOW_TRACKING_URI=http://localhost:5000 python serving/api.py
 cd frontend && python -m http.server 8080
 ```
 
-### Adding YOLO26 Support
-
-To add YOLO26, simply update `src/training.py`:
-
-```python
-model_map = {
-    # Existing
-    'yolo11n': 'yolo11n.pt',
-    'yolo11s': 'yolo11s.pt',
-    # ... other yolo11
-    
-    # Add YOLO26
-    'yolo26n': 'yolo26n.pt',
-    'yolo26s': 'yolo26s.pt',
-    'yolo26m': 'yolo26m.pt',
-    # ...
-}
-```
-
-Then use in `training_config.yaml`:
-```yaml
-model:
-  architecture: "yolo26n"
-```
-
 ## 🧪 Testing
 
 ```bash

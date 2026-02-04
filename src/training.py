@@ -88,10 +88,12 @@ class YOLOTrainer:
             'yolo11l': 'yolo11l.pt',
             'yolo11x': 'yolo11x.pt',
 
-            # Placeholder for future YOLO26 (when available)
-            # 'yolo26n': 'yolo26n.pt',
-            # 'yolo26s': 'yolo26s.pt',
-            # ... add more as needed
+            # YOLOv26 models
+            'yolo26n': 'yolo26n.pt',
+            'yolo26s': 'yolo26s.pt',
+            'yolo26m': 'yolo26m.pt',
+            'yolo26l': 'yolo26l.pt',
+            'yolo26x': 'yolo26x.pt',
         }
 
         if architecture not in model_map:
