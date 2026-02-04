@@ -1,0 +1,190 @@
+# MLOps Training Configuration - YOLOv11 Finger Counting
+
+# =====================
+# YOLO Model Configuration
+# =====================
+model:
+  # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
+  # Easily extensible for future versions (e.g., yolo26n when available)
+  architecture: "yolo11n"  # Nano for >10 FPS
+  
+  # Pretrained weights (set to null to train from scratch)
+  pretrained: true
+
+# =====================
+# Dataset Configuration
+# =====================
+dataset:
+  # Dataset splits (must sum to 1.0)
+  # Default: 80% train, 10% val, 10% test
+  split_ratios:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  
+  # Random seed for reproducibility
+  seed: 42
+  
+  # Image size for training (must be multiple of 32)
+  img_size: 640
+  
+  # Auto-generate data.yaml if not present
+  auto_generate_config: true
+
+# =====================
+# Training Hyperparameters
+# =====================
+training:
+  # Number of epochs
+  epochs: 100
+  
+  # Batch size (adjust based on GPU memory)
+  batch_size: 16
+  
+  # Number of workers for data loading
+  workers: 8
+  
+  # Initial learning rate
+  lr0: 0.01
+  
+  # Final learning rate (lr0 * lrf)
+  lrf: 0.01
+  
+  # SGD momentum / Adam beta1
+  momentum: 0.937
+  
+  # Optimizer weight decay
+  weight_decay: 0.0005
+  
+  # Warmup epochs
+  warmup_epochs: 3.0
+  
+  # Warmup initial momentum
+  warmup_momentum: 0.8
+  
+  # Warmup initial bias lr
+  warmup_bias_lr: 0.1
+  
+  # Use automatic mixed precision (AMP)
+  amp: true
+  
+  # Close mosaic augmentation in final N epochs
+  close_mosaic: 10
+
+# =====================
+# Data Augmentation
+# =====================
+augmentation:
+  # HSV-Hue augmentation (fraction)
+  hsv_h: 0.015
+  
+  # HSV-Saturation augmentation (fraction)
+  hsv_s: 0.7
+  
+  # HSV-Value augmentation (fraction)
+  hsv_v: 0.4
+  
+  # Image rotation (+/- deg)
+  degrees: 0.0
+  
+  # Image translation (+/- fraction)
+  translate: 0.1
+  
+  # Image scale (+/- gain)
+  scale: 0.5
+  
+  # Image shear (+/- deg)
+  shear: 0.0
+  
+  # Image perspective (+/- fraction)
+  perspective: 0.0
+  
+  # Flip up-down probability
+  flipud: 0.0
+  
+  # Flip left-right probability
+  fliplr: 0.5
+  
+  # Mosaic augmentation probability
+  mosaic: 1.0
+  
+  # MixUp augmentation probability
+  mixup: 0.0
+  
+  # Copy-paste augmentation probability
+  copy_paste: 0.0
+
+# =====================
+# MLflow Experiment Tracking
+# =====================
+mlflow:
+  # Experiment name
+  experiment_name: "yolov11-finger-counting"
+  
+  # Run name prefix (will be suffixed with timestamp)
+  run_name_prefix: "yolo11n-train"
+  
+  # Tags to add to the run
+  tags:
+    project: "MLOps Finger Counting"
+    framework: "Ultralytics YOLOv11"
+    task: "object-detection"
+    dataset: "finger-counting"
+  
+  # Log frequency (epochs)
+  log_interval: 1
+  
+  # Save top N models
+  save_top_k: 3
+  
+  # Metric to monitor for best model
+  monitor_metric: "metrics/mAP50-95(B)"
+  
+  # Model registry name
+  registered_model_name: "yolov11-finger-counting"
+  
+  # Auto-register best model
+  auto_register: true
+  
+  # Model stage after registration (None, Staging, Production)
+  auto_promote_stage: "Staging"
+
+# =====================
+# Validation & Callbacks
+# =====================
+validation:
+  # Validation interval (epochs)
+  val_interval: 1
+  
+  # Save validation predictions
+  save_predictions: true
+  
+  # Number of prediction samples to save
+  num_prediction_samples: 20
+  
+  # Confidence threshold for predictions
+  conf_threshold: 0.25
+  
+  # IOU threshold for NMS
+  iou_threshold: 0.7
+
+# =====================
+# Hardware & Performance
+# =====================
+device:
+  # Device to use: 'cpu', 'cuda', 'cuda:0', etc.
+  # Set to null for auto-detection
+  device: null
+  
+  # Enable DDP (Distributed Data Parallel)
+  ddp: false
+
+# =====================
+# Paths
+# =====================
+paths:
+  # Output directory for experiments
+  output_dir: "experiments"
+  
+  # Cache directory
+  cache_dir: "cache"

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv11 Finger Counting - MLOps Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>🤚 YOLOv11 Finger Counting</h1>
+            <span class="nav-subtitle">MLOps Platform</span>
+        </div>
+        <div class="nav-links">
+            <a href="#" class="nav-link active" data-page="inference">Live Inference</a>
+            <a href="#" class="nav-link" data-page="models">Model Selection</a>
+            <a href="#" class="nav-link" data-page="experiments">Experiments</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page 1: Live Inference -->
+        <div id="page-inference" class="page active">
+            <div class="page-header">
+                <h2>Real-Time Inference</h2>
+                <p>Live webcam feed with YOLO finger detection</p>
+            </div>
+
+            <div class="inference-grid">
+                <!-- Video Panel -->
+                <div class="card video-panel">
+                    <div class="card-header">
+                        <h3>📹 Webcam Feed</h3>
+                        <div class="controls">
+                            <button id="startWebcam" class="btn btn-primary">Start Camera</button>
+                            <button id="stopWebcam" class="btn btn-secondary" disabled>Stop Camera</button>
+                        </div>
+                    </div>
+                    <div class="video-container">
+                        <video id="webcam" autoplay playsinline></video>
+                        <canvas id="canvas"></canvas>
+                    </div>
+                    <div class="video-stats">
+                        <span id="fps" class="stat-badge">FPS: 0</span>
+                        <span id="latency" class="stat-badge">Latency: 0ms</span>
+                        <span id="resolution" class="stat-badge">Resolution: 0x0</span>
+                    </div>
+                </div>
+
+                <!-- Results Panel -->
+                <div class="results-panel">
+                    <!-- Finger Count Display -->
+                    <div class="card finger-count-card">
+                        <h3>👆 Finger Count</h3>
+                        <div class="finger-count-display">
+                            <span id="fingerCount" class="finger-count">0</span>
+                        </div>
+                        <p class="finger-count-label">fingers detected</p>
+                    </div>
+
+                    <!-- Model Info -->
+                    <div class="card model-info-card">
+                        <h3>🤖 Current Model</h3>
+                        <div id="currentModelInfo" class="model-info">
+                            <div class="info-row">
+                                <span class="label">Architecture:</span>
+                                <span id="modelArch" class="value">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Version:</span>
+                                <span id="modelVersion" class="value">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Stage:</span>
+                                <span id="modelStage" class="badge">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">mAP@50-95:</span>
+                                <span id="modelMap" class="value">-</span>
+                            </div>
+                        </div>
+                        <button id="changeModelBtn" class="btn btn-outline">Change Model</button>
+                    </div>
+
+                    <!-- Predictions List -->
+                    <div class="card predictions-card">
+                        <h3>📋 Predictions</h3>
+                        <div id="predictionsList" class="predictions-list">
+                            <p class="empty-state">No predictions yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 2: Model Selection -->
+        <div id="page-models" class="page">
+            <div class="page-header">
+                <h2>Model Selection</h2>
+                <p>Browse and select models from MLflow Model Registry</p>
+                <button id="refreshModels" class="btn btn-primary">🔄 Refresh</button>
+            </div>
+
+            <div id="modelsGrid" class="models-grid">
+                <div class="loading">Loading models...</div>
+            </div>
+        </div>
+
+        <!-- Page 3: Experiments Dashboard -->
+        <div id="page-experiments" class="page">
+            <div class="page-header">
+                <h2>Experiments Dashboard</h2>
+                <p>View all training experiments and metrics</p>
+                <button id="refreshExperiments" class="btn btn-primary">🔄 Refresh</button>
+            </div>
+
+            <div id="experimentsList" class="experiments-list">
+                <div class="loading">Loading experiments...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

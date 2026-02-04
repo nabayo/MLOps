@@ -1,4 +1,56 @@
-dataset
-*.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# MLflow
+mlruns/
+mlartifacts/
+experiments/
+
+# Dataset
+dataset/
+cache/
+
+# Models
+models/
+*.pt
+*.pth
+*.onnx
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+temp_*.yaml
+temp_*.csv
+temp_*.png
+
+# Docker volumes (when mounted locally)
+postgres_data/
+minio_data/
+
+# Tokens
 *token*
-*venv*
