@@ -1,6 +1,6 @@
 /**
  * MLOps Frontend Application
- * 
+ *
  * Features:
  * - Live webcam inference with finger counting
  * - Model selection and live switching
@@ -320,7 +320,7 @@ async function loadModels() {
                                     <span class="metric">${k}: ${v.toFixed(4)}</span>
                                 `).join('')}
                             </div>
-                            <button class="btn btn-sm btn-primary" 
+                            <button class="btn btn-sm btn-primary"
                                     onclick="loadModel('${model.name}', '${version.version}')">
                                 Load Model
                             </button>

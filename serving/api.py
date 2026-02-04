@@ -110,17 +110,17 @@ def load_model_from_registry(
 ) -> Dict[str, Any]:
     """
     Load model from MLflow Model Registry.
-    
+
     Args:
         model_name: Registered model name
         version: Model version (e.g., "1", "2")
         stage: Model stage ("Staging", "Production", "Archived")
-        
+
     Returns:
         Model info dictionary
     """
     global current_model, current_model_info
-    
+
     try:
         # Determine model URI
         if version:
@@ -130,9 +130,9 @@ def load_model_from_registry(
         else:
             # Default to Production
             model_uri = f"models:/{model_name}/Production"
-        
+
         print(f"Loading model from: {model_uri}")
-        
+
         # Get model version details
         if version:
             model_version = client.get_model_version(model_name, version)
@@ -142,43 +142,43 @@ def load_model_from_registry(
             if not versions:
                 raise ValueError(f"No model found for {model_name} in stage {stage}")
             model_version = versions[0]
-        
+
         # Download model artifacts and load
         # Note: mlflow.pytorch.load_model doesn't work well with YOLO
         # We need to download the weights file directly
         run_id = model_version.run_id
         run = client.get_run(run_id)
-        
+
         # Try to find weights in artifacts
         artifacts = client.list_artifacts(run_id, "weights")
         best_weights_path = None
-        
+
         for artifact in artifacts:
             if artifact.path.endswith("best.pt"):
                 best_weights_path = artifact.path
                 break
-        
+
         if not best_weights_path:
             raise ValueError("Could not find best.pt in model artifacts")
-        
+
         # Download artifact
         local_path = mlflow.artifacts.download_artifacts(
             run_id=run_id,
             artifact_path=best_weights_path
         )
-        
+
         # Load YOLO model
         model = YOLO(local_path)
-        
+
         # Get metrics
         metrics = {}
         for key, value in run.data.metrics.items():
             if 'final_' in key:
                 metrics[key.replace('final_', '')] = value
-        
+
         # Get parameters
         params = run.data.params
-        
+
         # Store model info
         model_info = {
             'name': model_name,
@@ -189,13 +189,13 @@ def load_model_from_registry(
             'run_id': run_id,
             'loaded_at': datetime.now().isoformat()
         }
-        
+
         current_model = model
         current_model_info = model_info
-        
+
         print(f"✓ Model loaded: {model_name} v{model_version.version} ({model_version.current_stage})")
         return model_info
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
@@ -203,19 +203,19 @@ def load_model_from_registry(
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     """
     Apply preprocessing pipeline to image.
-    
+
     Args:
         image: Input image in BGR format
-        
+
     Returns:
         Preprocessed image
     """
     if not preprocessing_enabled:
         return image
-    
+
     # For now, use fast face blur with OpenCV (deface is too slow for API)
     from src.preprocessing import FastFaceBlurStep
-    
+
     blur_step = FastFaceBlurStep(blur_kernel_size=51)
     return blur_step.process(image)
 
@@ -227,7 +227,7 @@ async def startup_event():
     """Load default model on startup."""
     model_name = os.getenv('MODEL_NAME', 'yolov11-finger-counting')
     model_stage = os.getenv('MODEL_STAGE', 'Production')
-    
+
     try:
         load_model_from_registry(model_name, stage=model_stage)
         print(f"✓ Default model loaded: {model_name} ({model_stage})")
@@ -252,7 +252,7 @@ async def get_current_model():
     """Get information about currently loaded model."""
     if current_model is None:
         raise HTTPException(status_code=404, detail="No model currently loaded")
-    
+
     return ModelInfo(**current_model_info)
 
 
@@ -261,18 +261,18 @@ async def list_models() -> List[Dict[str, Any]]:
     """List all registered models from MLflow."""
     try:
         registered_models = client.search_registered_models()
-        
+
         models_info = []
         for rm in registered_models:
             # Get latest versions
             latest_versions = client.get_latest_versions(rm.name)
-            
+
             versions = []
             for mv in latest_versions:
                 # Get run metrics
                 run = client.get_run(mv.run_id)
                 metrics = {k.replace('final_', ''): v for k, v in run.data.metrics.items() if 'final_' in k}
-                
+
                 versions.append({
                     'version': mv.version,
                     'stage': mv.current_stage,
@@ -280,15 +280,15 @@ async def list_models() -> List[Dict[str, Any]]:
                     'metrics': metrics,
                     'created_at': datetime.fromtimestamp(mv.creation_timestamp / 1000).isoformat()
                 })
-            
+
             models_info.append({
                 'name': rm.name,
                 'description': rm.description or '',
                 'versions': versions
             })
-        
+
         return models_info
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
 
@@ -313,12 +313,12 @@ async def list_experiments() -> List[Dict[str, Any]]:
     """List all MLflow experiments with runs."""
     try:
         experiments = client.search_experiments()
-        
+
         experiments_info = []
         for exp in experiments:
             # Get runs for this experiment
             runs = client.search_runs(exp.experiment_id, max_results=100)
-            
+
             runs_info = []
             for run in runs:
                 # Extract metrics
@@ -326,7 +326,7 @@ async def list_experiments() -> List[Dict[str, Any]]:
                 for key, value in run.data.metrics.items():
                     if 'final_' in key:
                         metrics[key.replace('final_', '')] = value
-                
+
                 runs_info.append({
                     'run_id': run.info.run_id,
                     'run_name': run.data.tags.get('mlflow.runName', 'Unnamed'),
@@ -336,16 +336,16 @@ async def list_experiments() -> List[Dict[str, Any]]:
                     'params': dict(run.data.params),
                     'tags': dict(run.data.tags)
                 })
-            
+
             experiments_info.append({
                 'experiment_id': exp.experiment_id,
                 'experiment_name': exp.name,
                 'run_count': len(runs),
                 'runs': runs_info
             })
-        
+
         return experiments_info
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list experiments: {str(e)}")
 
@@ -354,68 +354,68 @@ async def list_experiments() -> List[Dict[str, Any]]:
 async def predict(file: UploadFile = File(...)):
     """
     Run inference on uploaded image.
-    
+
     Returns finger count and predictions.
     """
     if current_model is None:
         raise HTTPException(status_code=503, detail="No model loaded")
-    
+
     try:
         # Read image
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
-        
+
         # Preprocessing
         preprocessing_applied = False
         if preprocessing_enabled:
             image = preprocess_image(image)
             preprocessing_applied = True
-        
+
         # Run inference
         import time
         start_time = time.time()
-        
+
         results = current_model.predict(
             image,
             conf=0.25,
             iou=0.7,
             verbose=False
         )
-        
+
         inference_time = (time.time() - start_time) * 1000
-        
+
         # Parse results
         predictions = []
         finger_count = 0
-        
+
         if len(results) > 0:
             result = results[0]
-            
+
             if result.boxes is not None:
                 boxes = result.boxes
-                
+
                 for i in range(len(boxes)):
                     box = boxes[i]
-                    
+
                     # Get class info
                     class_id = int(box.cls[0])
                     class_name = result.names[class_id]
                     confidence = float(box.conf[0])
-                    
+
                     # Get bbox coordinates
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    
+
                     predictions.append(PredictionBox(
                         class_name=class_name,
                         class_id=class_id,
                         confidence=confidence,
                         bbox=[x1, y1, x2, y2]
                     ))
-                    
+
                     # Count fingers
                     # Assuming class names like "1", "2", "3", "4", "5" or "finger-1", etc.
                     try:
@@ -425,14 +425,14 @@ async def predict(file: UploadFile = File(...)):
                             finger_count += int(class_name.split('-')[-1])
                     except:
                         finger_count += 1  # Fallback
-        
+
         return PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
             preprocessing_applied=preprocessing_applied,
             inference_time_ms=round(inference_time, 2)
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
@@ -449,7 +449,7 @@ async def get_metrics():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Run server
     uvicorn.run(
         app,

@@ -12,7 +12,7 @@ services:
     networks:
       - mlops-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,12 +29,12 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"  # S3 API
-      - "9001:9001"  # MinIO Console
+      - "9000:9000" # S3 API
+      - "9001:9001" # MinIO Console
     networks:
       - mlops-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -48,12 +48,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
-      mc mb myminio/${MINIO_BUCKET_NAME} --ignore-existing;
-      mc anonymous set public myminio/${MINIO_BUCKET_NAME};
-      exit 0;
-      "
+      /bin/sh -c " mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; mc mb myminio/${MINIO_BUCKET_NAME} --ignore-existing; mc anonymous set public myminio/${MINIO_BUCKET_NAME}; exit 0; "
     networks:
       - mlops-network
 
@@ -81,7 +76,7 @@ services:
     networks:
       - mlops-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:5000/health" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -104,11 +99,13 @@ services:
     volumes:
       - ./dataset:/app/dataset
       - ./configs:/app/configs
-      - ./models:/app/models  # Local model cache
+      - ./models:/app/models
+      - ./picsellia_token:/app/picsellia_token:ro # Mount token file
+      - ./experiments:/app/experiments # Local experiment outputs
     networks:
       - mlops-network
     profiles:
-      - training  # Only run when explicitly requested
+      - donotautostart # Only run when explicitly requested
 
   # Serving API
   serving:

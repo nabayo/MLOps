@@ -24,7 +24,7 @@ import torch
 
 class YOLOEvaluator:
     """YOLO model evaluation with comprehensive MLflow tracking."""
-    
+
     def __init__(
         self,
         model_path: str,
@@ -33,7 +33,7 @@ class YOLOEvaluator:
     ):
         """
         Initialize YOLO evaluator.
-        
+
         Args:
             model_path: Path to trained model weights
             data_yaml_path: Path to data.yaml file
@@ -42,28 +42,28 @@ class YOLOEvaluator:
         self.model_path = Path(model_path)
         self.data_yaml_path = data_yaml_path
         self.mlflow_run_id = mlflow_run_id
-        
+
         # Load model
         print(f"📦 Loading model from {model_path}")
         self.model = YOLO(str(model_path))
-        
+
     def evaluate(self) -> Dict[str, Any]:
         """
         Run complete evaluation pipeline.
-        
+
         Returns:
             Dictionary with evaluation results
         """
         print("\n" + "=" * 70)
         print("🧪 Starting Model Evaluation")
         print("=" * 70)
-        
+
         # Resume or start MLflow run
         if self.mlflow_run_id:
             run = mlflow.start_run(run_id=self.mlflow_run_id)
         else:
             run = mlflow.start_run()
-        
+
         with run:
             # Run validation on test set
             print("\n📊 Running evaluation on test set...")
@@ -76,7 +76,7 @@ class YOLOEvaluator:
                 iou=0.6,
                 plots=True
             )
-            
+
             # Extract metrics
             metrics = {
                 'test/mAP50': results.box.map50,
@@ -85,97 +85,97 @@ class YOLOEvaluator:
                 'test/recall': results.box.mr,
                 'test/f1': 2 * (results.box.mp * results.box.mr) / (results.box.mp + results.box.mr + 1e-6)
             }
-            
+
             # Log metrics
             print("\n📈 Logging evaluation metrics...")
             for key, value in metrics.items():
                 mlflow.log_metric(key, float(value))
                 print(f"  - {key}: {value:.4f}")
-            
+
             # Per-class metrics
             if hasattr(results.box, 'ap_class_index'):
                 print("\n📊 Logging per-class metrics...")
                 class_names = results.names
-                
+
                 for idx, class_id in enumerate(results.box.ap_class_index):
                     class_name = class_names[int(class_id)]
-                    
+
                     # Log per-class AP
                     if hasattr(results.box, 'ap'):
                         ap50 = results.box.ap[idx, 0]  # AP@0.5
                         ap50_95 = results.box.ap[idx].mean()  # AP@0.5:0.95
-                        
+
                         mlflow.log_metric(f"test/ap50_class_{class_name}", float(ap50))
                         mlflow.log_metric(f"test/ap50-95_class_{class_name}", float(ap50_95))
-            
+
             # Log visualizations
             self._log_visualizations(results)
-            
+
             # Create additional analysis
             self._create_error_analysis(results)
-            
+
             print("\n" + "=" * 70)
             print("✅ Evaluation Complete!")
             print("=" * 70)
-            
+
             return {
                 'metrics': metrics,
                 'run_id': run.info.run_id
             }
-    
+
     def _log_visualizations(self, results) -> None:
         """
         Log all evaluation visualizations.
-        
+
         Args:
             results: YOLO validation results
         """
         print("\n📦 Logging visualizations...")
-        
+
         # Get save directory
         save_dir = Path(results.save_dir)
-        
+
         # Log confusion matrix
         confusion_matrix = save_dir / 'confusion_matrix_normalized.png'
         if confusion_matrix.exists():
             mlflow.log_artifact(str(confusion_matrix), 'test_visualizations')
-        
+
         # Log PR curve
         pr_curve = save_dir / 'PR_curve.png'
         if pr_curve.exists():
             mlflow.log_artifact(str(pr_curve), 'test_visualizations')
-        
+
         # Log F1 curve
         f1_curve = save_dir / 'F1_curve.png'
         if f1_curve.exists():
             mlflow.log_artifact(str(f1_curve), 'test_visualizations')
-        
+
         # Log P curve
         p_curve = save_dir / 'P_curve.png'
         if p_curve.exists():
             mlflow.log_artifact(str(p_curve), 'test_visualizations')
-        
+
         # Log R curve
         r_curve = save_dir / 'R_curve.png'
         if r_curve.exists():
             mlflow.log_artifact(str(r_curve), 'test_visualizations')
-        
+
         print("✓ Visualizations logged")
-    
+
     def _create_error_analysis(self, results) -> None:
         """
         Create and log error analysis visualizations.
-        
+
         Args:
             results: YOLO validation results
         """
         print("\n🔍 Creating error analysis...")
-        
+
         # Create confidence distribution plot
         self._plot_confidence_distribution()
-        
+
         print("✓ Error analysis complete")
-    
+
     def _plot_confidence_distribution(self) -> None:
         """Plot and log confidence score distribution."""
         try:
@@ -185,13 +185,13 @@ class YOLOEvaluator:
                 save=False,
                 conf=0.001
             )
-            
+
             # Collect confidences
             confidences = []
             for result in results:
                 if result.boxes is not None:
                     confidences.extend(result.boxes.conf.cpu().numpy().tolist())
-            
+
             if len(confidences) > 0:
                 # Create plot
                 plt.figure(figsize=(10, 6))
@@ -200,14 +200,14 @@ class YOLOEvaluator:
                 plt.ylabel('Frequency')
                 plt.title('Prediction Confidence Distribution')
                 plt.grid(True, alpha=0.3)
-                
+
                 # Save and log
                 conf_dist_path = 'confidence_distribution.png'
                 plt.savefig(conf_dist_path, dpi=150, bbox_inches='tight')
                 plt.close()
-                
+
                 mlflow.log_artifact(conf_dist_path, 'test_visualizations')
                 os.remove(conf_dist_path)
-                
+
         except Exception as e:
             print(f"⚠ Could not create confidence distribution: {e}")

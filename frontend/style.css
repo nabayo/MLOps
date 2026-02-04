@@ -11,24 +11,24 @@
     --bg-secondary: #141829;
     --bg-card: #1a1f38;
     --bg-hover: #222844;
-    
+
     --text-primary: #e8eaf0;
     --text-secondary: #9ba3bc;
     --text-muted: #64697d;
-    
+
     --accent-primary: #00ff41;
     --accent-secondary: #00d4ff;
     --accent-tertiary: #a855f7;
-    
+
     --border-color: #2a304a;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-    
+
     --radius-sm: 6px;
     --radius-md: 12px;
     --radius-lg: 16px;
-    
+
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -129,6 +129,7 @@ body {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -331,9 +332,12 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: scale(1);
     }
+
     50% {
         transform: scale(1.1);
     }
@@ -621,7 +625,9 @@ body {
 /* ============================================================================
    Loading & Empty States
    ============================================================================ */
-.loading, .empty-state, .error-state {
+.loading,
+.empty-state,
+.error-state {
     text-align: center;
     padding: 3rem 2rem;
     color: var(--text-secondary);
@@ -633,8 +639,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 .error-state {
