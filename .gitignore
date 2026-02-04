@@ -54,3 +54,6 @@ minio_data/
 
 # Tokens
 *token*
+
+# Unwanted files
+*.zip

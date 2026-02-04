@@ -121,14 +121,68 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
-      MODEL_NAME: ${MODEL_NAME}
-      MODEL_STAGE: ${MODEL_STAGE}
-      ENABLE_PREPROCESSING: ${ENABLE_PREPROCESSING}
+      DEFAULT_MODEL_NAME: ${DEFAULT_MODEL_NAME:-yolo11-finger-counter}
+      DEFAULT_MODEL_STAGE: ${DEFAULT_MODEL_STAGE:-Production}
+      ENABLE_PREPROCESSING: ${ENABLE_PREPROCESSING:-true}
     ports:
       - "8000:8000"
+    volumes:
+      - ./models:/app/models
     networks:
       - mlops-network
     restart: unless-stopped
+
+  # MLflow Export Service
+  export:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mlops-export
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
+    volumes:
+      - ./backups:/app/backups
+      - ./scripts:/app/scripts:ro
+    networks:
+      - mlops-network
+    command: python scripts/export_mlflow.py --output-dir /app/backups
+    profiles:
+      - tools
+
+  # MLflow Import Service
+  import:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mlops-import
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
+      BACKUP_FILE: ${BACKUP_FILE:-}
+    volumes:
+      - ./backups:/app/backups
+      - ./scripts:/app/scripts:ro
+    networks:
+      - mlops-network
+    command: >
+      bash -c " if [ -z \"$BACKUP_FILE\" ]; then
+        echo '❌ Error: BACKUP_FILE environment variable not set';
+        echo 'Usage: BACKUP_FILE=my_backup.zip docker-compose run --rm import';
+        exit 1;
+      fi; python scripts/import_mlflow.py /app/backups/$BACKUP_FILE "
+    profiles:
+      - tools
 
   # Frontend Dashboard
   frontend:
