@@ -26,11 +26,11 @@ Write-Host ""
 Write-Host "================================" -ForegroundColor Green
 Write-Host "  Serving API is running!"
 Write-Host "================================" -ForegroundColor Green
-Write-Host "📍 API endpoint: http://localhost:8000"
-Write-Host "📖 API docs: http://localhost:8000/docs"
-Write-Host "📊 MLflow UI: http://localhost:5000"
+Write-Host "[POINT] API endpoint: http://localhost:8000"
+Write-Host "[DOCS]  API docs:     http://localhost:8000/docs"
+Write-Host "[UI]    MLflow UI:    http://localhost:5000"
 Write-Host ""
-Write-Host "💡 Test the API:" -ForegroundColor Yellow
+Write-Host "[INFO] Test the API:" -ForegroundColor Yellow
 Write-Host "   curl http://localhost:8000/health"
 Write-Host ""
-Write-Host "🛑 To stop: docker-compose stop serving" -ForegroundColor Gray
+Write-Host "[STOP] To stop: docker-compose stop serving" -ForegroundColor Gray
