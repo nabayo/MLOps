@@ -500,23 +500,4 @@ curl -X POST "http://localhost:8000/models/load?model_name=yolov11-finger-counti
 
 ## 📝 License
 
-[Your License Here]
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## 📞 Support
-
-For issues or questions:
-- Open a GitHub issue
-- Check MLflow UI for experiment details
-- Review logs: `docker-compose logs <service-name>`
-
----
-
-**Built with ❤️ using YOLOv11, MLflow, FastAPI, and Docker**
+TODO
