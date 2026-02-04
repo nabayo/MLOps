@@ -58,13 +58,52 @@ class YOLOEvaluator:
         print("🧪 Starting Model Evaluation")
         print("=" * 70)
 
-        # Resume or start MLflow run
-        if self.mlflow_run_id:
+        # Check if we're already in a run context
+        existing_run = mlflow.active_run()
+        should_end_run = False
+        
+        if existing_run and self.mlflow_run_id:
+            # If there's an active run and it matches our target, use it
+            if existing_run.info.run_id == self.mlflow_run_id:
+                print(f"✓ Using existing active run: {self.mlflow_run_id}")
+                run = existing_run
+            else:
+                # Different run is active, end it and start ours
+                print(f"⚠ Ending unrelated run {existing_run.info.run_id}")
+                mlflow.end_run()
+                
+                # Get the experiment ID from the target run to avoid mismatch
+                client = mlflow.tracking.MlflowClient()
+                target_run_info = client.get_run(self.mlflow_run_id)
+                target_experiment_id = target_run_info.info.experiment_id
+                
+                # Set the experiment before starting the run
+                mlflow.set_experiment(experiment_id=target_experiment_id)
+                
+                run = mlflow.start_run(run_id=self.mlflow_run_id)
+                should_end_run = True
+        elif existing_run and not self.mlflow_run_id:
+            # Active run exists but we don't have a target ID, use the active one
+            print(f"✓ Using existing active run: {existing_run.info.run_id}")
+            run = existing_run
+        elif self.mlflow_run_id:
+            # No active run but we have a target ID
+            # Get the experiment ID from the target run to avoid mismatch
+            client = mlflow.tracking.MlflowClient()
+            target_run_info = client.get_run(self.mlflow_run_id)
+            target_experiment_id = target_run_info.info.experiment_id
+            
+            # Set the experiment before starting the run
+            mlflow.set_experiment(experiment_id=target_experiment_id)
+            
             run = mlflow.start_run(run_id=self.mlflow_run_id)
+            should_end_run = True
         else:
+            # No active run and no target ID, create new
             run = mlflow.start_run()
+            should_end_run = True
 
-        with run:
+        try:
             # Run validation on test set
             print("\n📊 Running evaluation on test set...")
             results = self.model.val(
@@ -122,6 +161,10 @@ class YOLOEvaluator:
                 'metrics': metrics,
                 'run_id': run.info.run_id
             }
+        finally:
+            # Only end the run if we started it
+            if should_end_run:
+                mlflow.end_run()
 
     def _log_visualizations(self, results) -> None:
         """

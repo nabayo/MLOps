@@ -144,28 +144,59 @@ def load_model_from_registry(
             model_version = versions[0]
 
         # Download model artifacts and load
-        # Note: mlflow.pytorch.load_model doesn't work well with YOLO
-        # We need to download the weights file directly
+        # The model source tells us exactly where the weights are
         run_id = model_version.run_id
         run = client.get_run(run_id)
 
-        # Try to find weights in artifacts
-        artifacts = client.list_artifacts(run_id, "weights")
-        best_weights_path = None
+        # Parse the source URI to get the artifact path
+        # Source format: "runs:/<run_id>/<artifact_path>"
+        source = model_version.source
+        print(f"Model source: {source}")
+        
+        if source.startswith("runs:/"):
+            # Extract artifact path from source
+            parts = source.replace("runs:/", "").split("/", 1)
+            if len(parts) == 2:
+                artifact_path = parts[1]  # e.g., "weights/best.pt"
+            else:
+                # Fallback to default path
+                artifact_path = "weights/best.pt"
+        else:
+            # Direct S3 path or other format
+            artifact_path = "weights/best.pt"
+        
+        print(f"Attempting to download: {artifact_path}")
 
-        for artifact in artifacts:
-            if artifact.path.endswith("best.pt"):
-                best_weights_path = artifact.path
-                break
-
-        if not best_weights_path:
-            raise ValueError("Could not find best.pt in model artifacts")
-
-        # Download artifact
-        local_path = mlflow.artifacts.download_artifacts(
-            run_id=run_id,
-            artifact_path=best_weights_path
-        )
+        # Download artifact directly (don't list, just download)
+        try:
+            local_path = mlflow.artifacts.download_artifacts(
+                run_id=run_id,
+                artifact_path=artifact_path
+            )
+            print(f"✓ Downloaded to: {local_path}")
+        except Exception as download_error:
+            # If the exact path fails, try common alternatives
+            print(f"First attempt failed, trying alternatives...")
+            alternatives = [
+                "weights/best.pt",
+                "model/weights/best.pt", 
+                "best.pt"
+            ]
+            
+            local_path = None
+            for alt_path in alternatives:
+                try:
+                    local_path = mlflow.artifacts.download_artifacts(
+                        run_id=run_id,
+                        artifact_path=alt_path
+                    )
+                    print(f"✓ Found at: {alt_path}")
+                    break
+                except:
+                    continue
+            
+            if not local_path:
+                raise ValueError(f"Could not find model weights. Tried: {artifact_path}, {alternatives}")
 
         # Load YOLO model
         model = YOLO(local_path)
@@ -261,6 +292,23 @@ async def list_models() -> List[Dict[str, Any]]:
     """List all registered models from MLflow."""
     try:
         registered_models = client.search_registered_models()
+        
+        # Fallback: Check if default model exists (search sometimes fails)
+        default_model_name = os.getenv('MODEL_NAME', 'yolov11-finger-counting')
+        
+        # Normalize names for comparison
+        found_names = [rm.name for rm in registered_models]
+        
+        # Try both the env var name and the Capitalized version we likely created
+        for name_to_check in [default_model_name, "YOLOv11-Finger-Counter"]:
+            if name_to_check not in found_names:
+                try:
+                    m = client.get_registered_model(name_to_check)
+                    print(f"Fallback: Found {name_to_check} via direct lookup")
+                    registered_models.append(m)
+                except:
+                    pass
+
 
         models_info = []
         for rm in registered_models:

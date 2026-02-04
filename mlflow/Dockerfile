@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Install MLflow and dependencies
-RUN pip install --no-cache-dir \
+RUN pip install \
     setuptools \
     mlflow==2.18.0 \
     psycopg2-binary==2.9.9 \

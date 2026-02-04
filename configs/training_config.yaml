@@ -36,10 +36,10 @@ dataset:
 # =====================
 training:
   # Number of epochs
-  epochs: 100
+  epochs: 10
   
   # Batch size (adjust based on GPU memory)
-  batch_size: 16
+  batch_size: 8
   
   # Number of workers for data loading
   workers: 8

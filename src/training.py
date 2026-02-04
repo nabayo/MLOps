@@ -329,23 +329,42 @@ class YOLOTrainer:
         print("\n🏷 Registering model to MLflow Model Registry...")
 
         try:
-            # Log model as PyTorch
-            model_info = mlflow.pytorch.log_model(
-                pytorch_model=self.model.model,
-                artifact_path="model",
-                registered_model_name=self.mlflow_config['registered_model_name'],
-            )
-
-            # Get model version
+            # Get the current run info
+            run = mlflow.active_run()
+            if not run:
+                print("⚠ No active MLflow run, skipping registration")
+                return
+                
+            run_id = run.info.run_id
             client = mlflow.tracking.MlflowClient()
-            model_versions = client.search_model_versions(
-                f"name='{self.mlflow_config['registered_model_name']}'"
+            
+            # Log the model weights as artifact manually
+            mlflow.log_artifact(str(best_model_path), "weights")
+            print("  ✓ Model weights logged as artifact")
+            
+            # Ensure registered model exists
+            model_name = self.mlflow_config['registered_model_name']
+            try:
+                client.create_registered_model(model_name)
+                print(f"  ✓ Created registered model: {model_name}")
+            except Exception:
+                # Model already exists, which is fine
+                pass
+            
+            # Create model version using direct API
+            source_uri = f"runs:/{run_id}/weights/best.pt"
+            model_version = client.create_model_version(
+                name=model_name,
+                source=source_uri,
+                run_id=run_id
             )
-            latest_version = max([int(mv.version) for mv in model_versions])
+            
+            latest_version = model_version.version
+            print(f"  ✓ Created model version: {latest_version}")
 
             # Add description
             client.update_model_version(
-                name=self.mlflow_config['registered_model_name'],
+                name=model_name,
                 version=latest_version,
                 description=f"YOLOv11 Finger Counting Model - {self.architecture} - "
                            f"mAP@50-95: {final_metrics.get('mAP50-95', 'N/A'):.4f}"
@@ -355,16 +374,19 @@ class YOLOTrainer:
             auto_promote_stage = self.mlflow_config.get('auto_promote_stage')
             if auto_promote_stage:
                 client.transition_model_version_stage(
-                    name=self.mlflow_config['registered_model_name'],
+                    name=model_name,
                     version=latest_version,
-                    stage=auto_promote_stage
+                    stage=auto_promote_stage,
+                    archive_existing_versions=True
                 )
                 print(f"✓ Model promoted to '{auto_promote_stage}' stage")
 
-            print(f"✓ Model registered: {self.mlflow_config['registered_model_name']} v{latest_version}")
+            print(f"✓ Model registered: {model_name} v{latest_version}")
 
         except Exception as e:
             print(f"⚠ Model registration failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     def train(self) -> Dict[str, Any]:
         """
