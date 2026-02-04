@@ -11,20 +11,20 @@ from picsellia import DatasetVersion as PicselliaDatasetVersion
 
 def load_data(config: dict[str, Any]) -> DatasetLoader:
 
-    # connect to picsellia
-    client: PicselliaClient = PicselliaClient(api_token=config["picsellia_token"])
-
-    # Get the dataset
-    dataset: PicselliaDataset = client.get_dataset(name=config["dataset_name"])
-
-    # Get the datasetversion
-    dataset_version: PicselliaDatasetVersion = dataset.get_version(version=config["dataset_version"])
-
     # Define the download path
     download_path: str = get_dataset_download_path(config)
 
     # Download the dataset if not already downloaded
-    if not os.path.exists(download_path):
+    if not os.path.exists(download_path) or not os.listdir(download_path):
+
+        # connect to picsellia
+        client: PicselliaClient = PicselliaClient(api_token=config["picsellia_token"])
+
+        # Get the dataset
+        dataset: PicselliaDataset = client.get_dataset(name=config["dataset_name"])
+
+        # Get the datasetversion
+        dataset_version: PicselliaDatasetVersion = dataset.get_version(version=config["dataset_version"])
 
         # Create the directory
         os.makedirs(download_path)

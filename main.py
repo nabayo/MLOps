@@ -2,6 +2,7 @@ from typing import Any
 
 from src.config import load_config
 from src.picsellia import load_data
+from src.dataset_loader import DatasetLoader
 
 
 def main():

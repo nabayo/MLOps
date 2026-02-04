@@ -12,7 +12,14 @@ def get_dataset_download_path(config: dict[str, Any]) -> str:
     dataset_name: str = config["dataset_name"].replace(" ", "_")
     dataset_version: str = config["dataset_version"].replace(" ", "_")
 
-    return os.path.join(dataset_download_path, dataset_name, dataset_version)
+    relative_path: str = os.path.join(dataset_download_path, dataset_name, dataset_version)
+
+    absolute_path: str = os.path.abspath(relative_path)
+
+    print(f"[DEBUG] Dataset relative path: {relative_path}")
+    print(f"[DEBUG] Dataset absolute path: {absolute_path}")
+
+    return absolute_path
 
 
 class DatasetLoader:
