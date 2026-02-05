@@ -18,6 +18,7 @@ from datetime import datetime
 
 import mlflow
 import mlflow.pytorch
+from mlflow.tracking import MlflowClient
 import yaml
 import torch
 from ultralytics import YOLO
@@ -403,6 +404,32 @@ class YOLOTrainer:
             import traceback
             traceback.print_exc()
 
+    def _ensure_experiment_active(self) -> None:
+        """
+        Ensure the MLflow experiment is active and not deleted.
+        Restores deleted experiments if found.
+        """
+        experiment_name = self.mlflow_config['experiment_name']
+        client = MlflowClient()
+
+        try:
+            # Check if experiment exists
+            experiment = client.get_experiment_by_name(experiment_name)
+            if experiment:
+                if experiment.lifecycle_stage == 'deleted':
+                    print(f"♻ Restoring deleted experiment: {experiment_name}")
+                    client.restore_experiment(experiment.experiment_id)
+        except Exception as e:
+            print(f"⚠ Note on experiment setup: {e}")
+
+        # Set as active (creates if doesn't exist)
+        mlflow.set_experiment(experiment_name)
+        
+        # CRITICAL for Ultralytics: Set env var so it picks up the right experiment
+        # otherwise it defaults to 'project' name (which is 'experiments')
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = experiment_name
+
+
     def train(self) -> Dict[str, Any]:
         """
         Execute complete training pipeline with MLflow tracking.
@@ -414,8 +441,8 @@ class YOLOTrainer:
         print("🚀 Starting YOLOv11 Training with MLflow Tracking")
         print("=" * 70)
 
-        # Set experiment
-        mlflow.set_experiment(self.mlflow_config['experiment_name'])
+        # Ensure experiment exists and is active (handle deleted state)
+        self._ensure_experiment_active()
 
         # Start MLflow run
         run_name = f"{self.mlflow_config['run_name_prefix']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -441,6 +468,9 @@ class YOLOTrainer:
 
             # Log all parameters
             self._log_all_parameters(training_args)
+
+            # Force Ultralytics to use this specific run instead of creating a new one (https://mlflow.org/docs/latest/api_reference/python_api/mlflow.environment_variables.html)
+            os.environ["MLFLOW_RUN_ID"] = run.info.run_id
 
             # Start training
             print(f"\n🏋️ Training {self.architecture} for {self.training_params['epochs']} epochs...")

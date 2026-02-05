@@ -435,7 +435,10 @@ async def set_skip_frames(config: SkipFrameConfig):
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    skip_check: bool = Query(True, description="Whether to apply frame skipping logic")
+):
     """
     Run inference on uploaded image.
 
@@ -460,7 +463,7 @@ async def predict(file: UploadFile = File(...)):
         FRAME_COUNTER += 1
         
         # Check if we should skip
-        if FRAME_COUNTER < SKIP_FRAME_LIMIT:
+        if skip_check and FRAME_COUNTER < SKIP_FRAME_LIMIT:
             # Skip inference
             # print(f"⏭ Skipping frame {FRAME_COUNTER}/{SKIP_FRAME_LIMIT}")
             
@@ -505,7 +508,7 @@ async def predict(file: UploadFile = File(...)):
         try:
             results = current_model.predict(
                 image,
-                conf=0.25,
+                conf=0.15,
                 iou=0.7,
                 verbose=False
             )

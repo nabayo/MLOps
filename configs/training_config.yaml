@@ -6,7 +6,7 @@
 model:
   # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
   # Easily extensible for future versions (e.g., yolo26n when available)
-  architecture: "yolo26n"  # Nano for >10 FPS
+  architecture: "yolo26s"  # Nano for >10 FPS
   
   # Pretrained weights (set to null to train from scratch)
   pretrained: true
@@ -18,15 +18,15 @@ dataset:
   # Dataset splits (must sum to 1.0)
   # Default: 80% train, 10% val, 10% test
   split_ratios:
-    train: 0.8
-    val: 0.1
-    test: 0.1
+    train: 0.7
+    val: 0.15
+    test: 0.15
   
   # Random seed for reproducibility
   seed: 42
   
   # Image size for training (must be multiple of 32)
-  img_size: 480
+  img_size: 640
   
   # Auto-generate data.yaml if not present
   auto_generate_config: true
@@ -76,22 +76,22 @@ training:
 # =====================
 augmentation:
   # HSV-Hue augmentation (fraction)
-  hsv_h: 0.015
+  hsv_h: 0.0
   
   # HSV-Saturation augmentation (fraction)
-  hsv_s: 0.7
+  hsv_s: 0.0
   
   # HSV-Value augmentation (fraction)
-  hsv_v: 0.4
+  hsv_v: 0.0
   
   # Image rotation (+/- deg)
   degrees: 0.0
   
   # Image translation (+/- fraction)
-  translate: 0.1
+  translate: 0.0
   
   # Image scale (+/- gain)
-  scale: 0.5
+  scale: 0.0
   
   # Image shear (+/- deg)
   shear: 0.0
@@ -103,10 +103,10 @@ augmentation:
   flipud: 0.0
   
   # Flip left-right probability
-  fliplr: 0.5
+  fliplr: 0.0
   
   # Mosaic augmentation probability
-  mosaic: 1.0
+  mosaic: 0.0
   
   # MixUp augmentation probability
   mixup: 0.0
@@ -119,10 +119,10 @@ augmentation:
 # =====================
 mlflow:
   # Experiment name
-  experiment_name: "yolov26-nano-finger-counting"
+  experiment_name: "yolov26-small-finger-counting"
   
   # Run name prefix (will be suffixed with timestamp)
-  run_name_prefix: "yolo26n-train"
+  run_name_prefix: "yolo26s-train"
   
   # Tags to add to the run
   tags:
@@ -147,7 +147,7 @@ mlflow:
   auto_register: true
   
   # Model stage after registration (None, Staging, Production)
-  auto_promote_stage: "Staging"
+  auto_promote_stage: "Production"
 
 # =====================
 # Validation & Callbacks
