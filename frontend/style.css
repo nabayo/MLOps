@@ -674,3 +674,47 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-primary);
 }
+
+/* ============================================================================
+   Analysis Page
+   ============================================================================ */
+.analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.upload-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    background: var(--bg-secondary);
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.upload-text {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.upload-subtext {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}

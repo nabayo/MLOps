@@ -17,6 +17,7 @@
         </div>
         <div class="nav-links">
             <a href="#" class="nav-link active" data-page="inference">Live Inference</a>
+            <a href="#" class="nav-link" data-page="analysis">Analysis</a>
             <a href="#" class="nav-link" data-page="models">Model Selection</a>
             <a href="#" class="nav-link" data-page="experiments">Experiments</a>
         </div>
@@ -98,6 +99,50 @@
             </div>
         </div>
 
+        <!-- Page 4: Analysis -->
+        <div id="page-analysis" class="page">
+            <div class="page-header">
+                <h2>Image Analysis</h2>
+                <p>Upload images for custom analysis with the current model</p>
+            </div>
+
+            <div class="analysis-grid">
+                <!-- Upload Panel -->
+                <div class="card upload-panel">
+                    <h3>📁 Upload Image</h3>
+                    <div id="uploadZone" class="upload-zone">
+                        <div class="upload-content">
+                            <span class="upload-icon">⬇️</span>
+                            <p class="upload-text">Drag & Drop image here</p>
+                            <p class="upload-subtext">or</p>
+                            <button id="uploadBtn" class="btn btn-primary btn-sm" style="margin-top: 1rem;">Select
+                                Image</button>
+                        </div>
+                        <input type="file" id="fileInput" accept="image/*" hidden>
+                    </div>
+                </div>
+
+                <!-- Analysis Results -->
+                <div id="analysisResults" class="results-panel" style="display: none;">
+                    <!-- Image Preview -->
+                    <div class="card video-panel">
+                        <h3>🖼️ Result</h3>
+                        <div class="video-container">
+                            <canvas id="analysisCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="card finger-count-card">
+                        <h3>👆 Finger Count</h3>
+                        <div class="finger-count-display">
+                            <span id="analysisCount" class="finger-count">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Page 2: Model Selection -->
         <div id="page-models" class="page">
             <div class="page-header">
@@ -132,7 +177,7 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="app.js?v=99999999"></script>
+    <script src="app.js?v=999999999"></script>
 </body>
 
 </html>

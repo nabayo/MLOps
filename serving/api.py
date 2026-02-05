@@ -176,7 +176,7 @@ def load_model_from_registry(
         else:
             # Direct S3 path or other format
             artifact_path = "weights/best.pt"
-        
+
         print(f"Attempting to download: {artifact_path}")
 
         # Download artifact directly (don't list, just download)
@@ -314,16 +314,19 @@ async def get_current_model():
 async def list_models() -> List[Dict[str, Any]]:
     """List all registered models from MLflow."""
     try:
+
         registered_models = client.search_registered_models()
         
         # Fallback: Check if default model exists (search sometimes fails)
-        default_model_name = os.getenv('MODEL_NAME', 'yolov11-finger-counting')
+        default_model_name = os.getenv('MODEL_NAME', "")
         
         # Normalize names for comparison
         found_names = [rm.name for rm in registered_models]
-        
+
+        print(f"\n\n\n\nFound models: {registered_models} {found_names}\n\n\n\n")
+
         # Try both the env var name and the Capitalized version we likely created
-        for name_to_check in [default_model_name, "YOLOv11-Finger-Counter"]:
+        for name_to_check in [default_model_name, "YOLOv26", "YOLOv11-Finger-Counter"]:
             if name_to_check not in found_names:
                 try:
                     m = client.get_registered_model(name_to_check)
@@ -512,6 +515,8 @@ async def predict(file: UploadFile = File(...)):
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Inference failed: {str(inf_error)}")
 
+        print(f"\n\n\n\n\033[92mDEBUG RESULTS: {results}\033[0m\n\n\n\n")
+
         inference_time = (time.time() - start_time) * 1000
 
         # Parse results
@@ -523,6 +528,8 @@ async def predict(file: UploadFile = File(...)):
 
             if result.boxes is not None:
                 boxes = result.boxes
+
+                print(f"\n\n\n\n\033[93mDEBUG BOXES: {boxes}\033[0m\n\n\n\n")
 
                 for i in range(len(boxes)):
                     box = boxes[i]
@@ -551,6 +558,8 @@ async def predict(file: UploadFile = File(...)):
                             finger_count += int(class_name.split('-')[-1])
                     except:
                         finger_count += 1  # Fallback
+
+        print(f"\n\n\n\n\033[92mDEBUG PREDICTIONS: {predictions}\033[0m\n\n\n\n")
 
         print(f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms")
 

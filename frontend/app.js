@@ -43,9 +43,200 @@ function initNavigation() {
                 loadModels();
             } else if (pageName === 'experiments') {
                 loadExperiments();
+            } else if (pageName === 'analysis') {
+                initAnalysisPage();
             }
         });
     });
+}
+
+// ============================================================================
+// Analysis Page
+// ============================================================================
+
+function initAnalysisPage() {
+    console.log('initAnalysisPage called');
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+
+    // Remove existing listeners to avoid duplicates (naive approach)
+    const newZone = uploadZone.cloneNode(true);
+    uploadZone.parentNode.replaceChild(newZone, uploadZone);
+
+    // re-get refs
+    const zone = document.getElementById('uploadZone');
+    const input = document.getElementById('fileInput');
+
+    // Better: Helper wrapper to ensure single init
+    setupUploadListeners(zone, document.getElementById('fileInput'), document.getElementById('uploadBtn'));
+}
+
+function setupUploadListeners(dropZone, input, btn) {
+    console.log('setupUploadListeners called', { dropZone, input, btn });
+    // Button trigger
+    if (btn) {
+        btn.onclick = (e) => {
+            console.log('Upload button clicked');
+            e.stopPropagation(); // Prevent bubbling causing double trigger if zone has listener
+            input.click();
+        };
+    }
+
+    // Zone click trigger (optional, if user clicks background)
+    dropZone.onclick = () => input.click();
+
+    input.onchange = (e) => {
+        if (e.target.files.length) handleAnalysisImage(e.target.files[0]);
+    };
+
+    // Prevent default behaviors for all drag events to stop browser from opening file
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        // Also add to document to be safe? No, just zone is enough usually if we are precise, 
+        // but if user misses zone, it opens. Let's stick to zone for now, user asked "if I drag ... in the browser".
+        // To be safe, we should prevent default on the whole document for drop if it's not in the zone, or just the zone.
+        // Let's fix the zone first.
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight logic
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length) handleAnalysisImage(files[0]);
+    }, false);
+}
+
+async function handleAnalysisImage(file) {
+    if (!file.type.startsWith('image/')) {
+        showToast('Please upload an image file', 'error');
+        return;
+    }
+
+    try {
+        showToast('Analyzing image...', 'info');
+
+        // Show results container
+        document.getElementById('analysisResults').style.display = 'grid';
+
+        // Preview Original (Optional, we will draw result directly)
+
+        // Send to API
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE_URL}/predict`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) throw new Error('Analysis failed');
+
+        const data = await response.json();
+
+        // Display Result
+        displayAnalysisResult(data, file);
+        showToast('Analysis complete', 'success');
+
+    } catch (error) {
+        console.error(error);
+        showToast('Analysis failed: ' + error.message, 'error');
+    }
+}
+
+async function displayAnalysisResult(data, originalFile) {
+    console.log('displayAnalysisResult called', data);
+    const canvas = document.getElementById('analysisCanvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    // Determine image source
+    let imgSrc = null;
+    if (data.processed_image) {
+        console.log('Using processed image from API');
+        imgSrc = 'data:image/jpeg;base64,' + data.processed_image;
+    } else if (originalFile) {
+        console.log('Using original uploaded file');
+        imgSrc = URL.createObjectURL(originalFile);
+    } else {
+        console.error('No image source available');
+        showToast('Error: No image to display', 'error');
+        return;
+    }
+
+    img.src = imgSrc;
+
+    img.onload = () => {
+        console.log('Image loaded for analysis display', img.width, img.height);
+
+        // Resize canvas to match image aspect ratio but fit within container
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+            const ratio = MAX_WIDTH / width;
+            width = MAX_WIDTH;
+            height = height * ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Draw predictions
+        const scale = width / img.width;
+        console.log('Drawing predictions with scale', scale);
+
+        if (data.predictions && data.predictions.length > 0) {
+            data.predictions.forEach(pred => {
+                const [x1, y1, x2, y2] = pred.bbox;
+                // Scale
+                const sx1 = x1 * scale;
+                const sy1 = y1 * scale;
+                const sw = (x2 - x1) * scale;
+                const sh = (y2 - y1) * scale;
+
+                ctx.strokeStyle = '#00ff41';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(sx1, sy1, sw, sh);
+
+                // Label
+                const label = `${pred.class_name} ${(pred.confidence * 100).toFixed(1)}%`;
+                ctx.font = 'bold 16px Arial';
+                const tm = ctx.measureText(label);
+
+                ctx.fillStyle = '#00ff41';
+                ctx.fillRect(sx1, sy1 - 24, tm.width + 10, 24);
+
+                ctx.fillStyle = '#000';
+                ctx.fillText(label, sx1 + 5, sy1 - 6);
+            });
+        } else {
+            console.log('No predictions to draw');
+        }
+
+        // Update Count
+        document.getElementById('analysisCount').textContent = data.finger_count || 0;
+    };
+
+    img.onerror = (e) => {
+        console.error('Failed to load image for display', e);
+        showToast('Failed to load image', 'error');
+    };
 }
 
 // ============================================================================
