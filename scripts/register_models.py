@@ -38,8 +38,14 @@ def register_all_models():
                 
             run_id = run.info.run_id
             run_name = run.info.run_name
-            # Infer model name
-            model_name = run.data.params.get("model_name", "YOLOv11-Finger-Counter")
+            run_id = run.info.run_id
+            run_name = run.info.run_name
+            # Infer model name from run name (contains experiment + date)
+            model_name = run_name if run_name else run.data.params.get("model_name", "YOLOv11-Finger-Counter")
+            
+            # Clean up model name (replace spaces, etc if needed, though run_name is usually safe)
+            # Ensure it doesn't contain invalid characters for MLflow registry
+            model_name = model_name.replace(":", "-").replace(" ", "_")
             
             print(f"  🏃 Run: {run_name} ({run_id})")
             
@@ -58,22 +64,28 @@ def register_all_models():
                 print(f"    ✨ Attempting to register {pt_file} to '{model_name}'...")
                 try:
                     model_uri = f"runs:/{run_id}/{pt_file}"
+                    
+                    # 1. Register Model
                     result = mlflow.register_model(model_uri=model_uri, name=model_name)
-                    
-                    # Update description
-                    client.update_model_version(
-                        name=model_name,
-                        version=result.version,
-                        description=f"Recovered from run {run_name} (Artifact: {pt_file})"
-                    )
-                    
                     print(f"    ✅ Registered version {result.version}")
+                    
+                    # 2. Update Description (Optional)
+                    try:
+                        client.update_model_version(
+                            name=model_name,
+                            version=result.version,
+                            description=f"Recovered from run {run_name} (Artifact: {pt_file})"
+                        )
+                    except Exception as desc_error:
+                        print(f"      ⚠ Warning: Could not update description: {desc_error}")
+
                     registered_count += 1
                     registered_version = result
                     break # Success
                     
                 except Exception as e:
                     # If 404/RestException, it means artifact missing or something
+                    # print(f"      warn: {e}")
                     pass
             
             if not registered_version:

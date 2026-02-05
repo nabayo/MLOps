@@ -420,6 +420,33 @@ async function loadModel(modelName, version) {
 }
 
 // ============================================================================
+// Skip Frame Configuration
+// ============================================================================
+
+async function setSkipFrames(value) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/config/skip_frames`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ skip_frames: parseInt(value) })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to update skip frames');
+        }
+
+        const data = await response.json();
+        showToast(`Skip frames set to ${data.skip_frames}`, 'success');
+
+    } catch (error) {
+        console.error('Error setting skip frames:', error);
+        showToast('Failed to update skip frames', 'error');
+    }
+}
+
+// ============================================================================
 // Experiments Dashboard Page
 // ============================================================================
 
@@ -517,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.nav-link')[1].click(); // Switch to models page
     });
     document.getElementById('refreshModels').addEventListener('click', loadModels);
+    document.getElementById('skipFrameInput').addEventListener('change', (e) => setSkipFrames(e.target.value));
     document.getElementById('refreshExperiments').addEventListener('click', loadExperiments);
 
     console.log('✓ MLOps Frontend initialized');

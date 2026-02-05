@@ -104,6 +104,10 @@
                 <h2>Model Selection</h2>
                 <p>Browse and select models from MLflow Model Registry</p>
                 <button id="refreshModels" class="btn btn-primary">🔄 Refresh</button>
+                <div class="control-group">
+                    <label for="skipFrameInput">Skip Frames:</label>
+                    <input type="number" id="skipFrameInput" min="0" max="60" value="6" class="input-control">
+                </div>
             </div>
 
             <div id="modelsGrid" class="models-grid">

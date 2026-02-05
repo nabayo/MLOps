@@ -56,6 +56,11 @@ current_model = None
 current_model_info = {}
 preprocessing_enabled = os.getenv('ENABLE_PREPROCESSING', 'false').lower() == 'true'
 
+# Skip frame global state
+SKIP_FRAME_LIMIT = 6  # Default skip frames
+FRAME_COUNTER = 0
+LAST_PREDICTION = None
+
 
 # Pydantic models
 class ModelInfo(BaseModel):
@@ -66,6 +71,11 @@ class ModelInfo(BaseModel):
     architecture: Optional[str]
     metrics: Dict[str, float]
     loaded_at: str
+
+
+class SkipFrameConfig(BaseModel):
+    """Configuration for frame skipping."""
+    skip_frames: int
 
 
 class PredictionBox(BaseModel):
@@ -411,6 +421,16 @@ async def list_experiments() -> List[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail=f"Failed to list experiments: {str(e)}")
 
 
+@app.post("/config/skip_frames")
+async def set_skip_frames(config: SkipFrameConfig):
+    """Set the number of frames to skip between inferences."""
+    global SKIP_FRAME_LIMIT, FRAME_COUNTER
+    SKIP_FRAME_LIMIT = config.skip_frames
+    FRAME_COUNTER = 0  # Reset counter when config changes
+    print(f"✓ Skip frame limit set to: {SKIP_FRAME_LIMIT}")
+    return {"status": "success", "skip_frames": SKIP_FRAME_LIMIT}
+
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
     """
@@ -429,6 +449,37 @@ async def predict(file: UploadFile = File(...)):
 
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
+
+        # Skip frame logic
+        global FRAME_COUNTER, LAST_PREDICTION
+        
+        # Increment counter
+        FRAME_COUNTER += 1
+        
+        # Check if we should skip
+        if FRAME_COUNTER < SKIP_FRAME_LIMIT:
+            # Skip inference
+            # print(f"⏭ Skipping frame {FRAME_COUNTER}/{SKIP_FRAME_LIMIT}")
+            
+            # Return last prediction if available to keep UI stable
+            if LAST_PREDICTION:
+                # Update inference time to 0 to indicate skip
+                last_response = LAST_PREDICTION.copy()
+                last_response.inference_time_ms = 0
+                return last_response
+            
+            # If no last prediction, return empty
+            return PredictionResponse(
+                finger_count=0,
+                predictions=[],
+                preprocessing_applied=False,
+                inference_time_ms=0,
+                processed_image=None
+            )
+            
+        # If we reached here, we process the frame
+        # Reset counter
+        FRAME_COUNTER = 0
 
         # Preprocessing
         preprocessing_applied = False
@@ -510,13 +561,18 @@ async def predict(file: UploadFile = File(...)):
             _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
             processed_image_b64 = base64.b64encode(buffer).decode('utf-8')
 
-        return PredictionResponse(
+        response = PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
             preprocessing_applied=preprocessing_applied,
             inference_time_ms=round(inference_time, 2),
             processed_image=processed_image_b64
         )
+        
+        # Update global last prediction
+        LAST_PREDICTION = response
+        
+        return response
 
     except HTTPException:
         raise
@@ -534,6 +590,7 @@ async def get_metrics():
         "model_loaded": current_model is not None,
         "model_info": current_model_info if current_model else {},
         "preprocessing_enabled": preprocessing_enabled,
+        "skip_frames": SKIP_FRAME_LIMIT
     }
 
 

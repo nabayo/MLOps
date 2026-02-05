@@ -141,8 +141,13 @@ class YOLOEvaluator:
 
                     # Log per-class AP
                     if hasattr(results.box, 'ap'):
-                        ap50 = results.box.ap[idx, 0]  # AP@0.5
-                        ap50_95 = results.box.ap[idx].mean()  # AP@0.5:0.95
+                        if results.box.ap.ndim > 1:
+                            ap50 = results.box.ap[idx, 0]  # AP@0.5
+                            ap50_95 = results.box.ap[idx].mean()  # AP@0.5:0.95
+                        else:
+                            # Handle 1D array case (when only one class or different shape)
+                            ap50 = results.box.ap[0]  # AP@0.5
+                            ap50_95 = results.box.ap.mean()  # AP@0.5:0.95
 
                         mlflow.log_metric(f"test/ap50_class_{class_name}", float(ap50))
                         mlflow.log_metric(f"test/ap50-95_class_{class_name}", float(ap50_95))

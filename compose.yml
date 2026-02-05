@@ -102,6 +102,7 @@ services:
       - ./models:/app/models
       - ./picsellia_token:/app/picsellia_token:ro # Mount token file
       - ./experiments:/app/experiments # Local experiment outputs
+      - ./scripts:/app/scripts:ro
     networks:
       - mlops-network
     profiles:

@@ -9,39 +9,58 @@ def check_registry():
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
     
-    print(f"Checking registry at {tracking_uri}...")
-    
-    try:
-        models = client.search_registered_models()
-        print(f"Found {len(models)} registered models:")
-        for model in models:
-            print(f"Name: {model.name}")
-            for v in model.latest_versions:
-                print(f"  - Version: {v.version}, Stage: {v.current_stage}, Status: {v.status}")
+    output_path = "/app/experiments/registry_dump.txt"
+    with open(output_path, "w") as f:
+        f.write(f"Registry Check at {tracking_uri}\n")
+        f.write("=" * 50 + "\n")
+        
+        try:
+            models = client.search_registered_models()
+            f.write(f"Found {len(models)} registered models:\n")
+            for model in models:
+                f.write(f"\nModel: {model.name}\n")
+                f.write(f"  Description: {model.description}\n")
+                if model.latest_versions:
+                    for v in model.latest_versions:
+                        f.write(f"  - Version: {v.version}\n")
+                        f.write(f"    Stage: {v.current_stage}\n")
+                        f.write(f"    Status: {v.status}\n")
+                        f.write(f"    Source: {v.source}\n")
+                        f.write(f"    Run ID: {v.run_id}\n")
+                else:
+                    f.write("  (No versions found)\n")
+                    
+            if len(models) == 0:
+                f.write("\nRegistry is empty (via search).\n")
                 
-        if len(models) == 0:
-            print("Registry is empty (via search).")
-            
-        # Specific check
-        try:
-            m = client.get_registered_model("YOLOv11-Finger-Counter")
-            print(f"Direct Lookup: Found {m.name}")
-            for v in m.latest_versions:
-                 print(f"  Version: {v.version}, Stage: {v.current_stage}")
+            # DEBUG: Check artifacts for the first available run to see why registration might be failing
+            try:
+                f.write("\n=== Artifact Inspection ===\n")
+                experiments = client.search_experiments()
+                if experiments:
+                    runs = client.search_runs(experiments[0].experiment_id)
+                    if runs:
+                        run = runs[0]
+                        f.write(f"Inspecting Run: {run.info.run_id} ({run.info.run_name})\n")
+                        artifacts = client.list_artifacts(run.info.run_id)
+                        f.write("Root Artifacts:\n")
+                        for art in artifacts:
+                            f.write(f"  - {art.path} (is_dir={art.is_dir})\n")
+                            if art.is_dir:
+                                sub = client.list_artifacts(run.info.run_id, art.path)
+                                for s in sub:
+                                    f.write(f"    - {s.path}\n")
+                    else:
+                        f.write("No runs found to inspect.\n")
+                else:
+                    f.write("No experiments found.\n")
+            except Exception as e:
+                f.write(f"Error inspecting artifacts: {e}\n")
+
         except Exception as e:
-            print(f"Direct Lookup (YOLOv11-Finger-Counter) Failed: {e}")
+            f.write(f"\nError searching models: {e}\n")
             
-        # Also check for the config name
-        try:
-            m = client.get_registered_model("yolov11-finger-counting")
-            print(f"Direct Lookup: Found {m.name}")
-            for v in m.latest_versions:
-                 print(f"  Version: {v.version}, Stage: {v.current_stage}")
-        except Exception as e:
-            print(f"Direct Lookup (yolov11-finger-counting) Failed: {e}")
-            
-    except Exception as e:
-        print(f"Error: {e}")
+    print(f"Registry dump written to {output_path}")
 
 if __name__ == "__main__":
     check_registry()
