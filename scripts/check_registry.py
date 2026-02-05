@@ -34,26 +34,33 @@ def check_registry():
                 f.write("\nRegistry is empty (via search).\n")
                 
             # DEBUG: Check artifacts for the first available run to see why registration might be failing
+            # DEBUG: Check artifacts for all runs
             try:
-                f.write("\n=== Artifact Inspection ===\n")
+                f.write("\n=== Artifact Inspection (All Runs) ===\n")
                 experiments = client.search_experiments()
-                if experiments:
-                    runs = client.search_runs(experiments[0].experiment_id)
+                for exp in experiments:
+                    f.write(f"\nExperiment: {exp.name} (ID: {exp.experiment_id})\n")
+                    runs = client.search_runs(exp.experiment_id)
                     if runs:
-                        run = runs[0]
-                        f.write(f"Inspecting Run: {run.info.run_id} ({run.info.run_name})\n")
-                        artifacts = client.list_artifacts(run.info.run_id)
-                        f.write("Root Artifacts:\n")
-                        for art in artifacts:
-                            f.write(f"  - {art.path} (is_dir={art.is_dir})\n")
-                            if art.is_dir:
-                                sub = client.list_artifacts(run.info.run_id, art.path)
-                                for s in sub:
-                                    f.write(f"    - {s.path}\n")
+                        for run in runs[:5]: # Inspect top 5 runs
+                            f.write(f"  Run: {run.info.run_id} ({run.info.run_name})\n")
+                            f.write(f"    Artifact URI: {run.info.artifact_uri}\n")
+                            try:
+                                artifacts = client.list_artifacts(run.info.run_id)
+                                if artifacts:
+                                    f.write("    Artifacts:\n")
+                                    for art in artifacts:
+                                        f.write(f"      - {art.path}\n")
+                                        if art.path == "weights" and art.is_dir:
+                                            sub = client.list_artifacts(run.info.run_id, "weights")
+                                            for s in sub:
+                                                f.write(f"        - {s.path}\n")
+                                else:
+                                    f.write("    (No artifacts found)\n")
+                            except Exception as e:
+                                f.write(f"    Error listing artifacts: {e}\n")
                     else:
-                        f.write("No runs found to inspect.\n")
-                else:
-                    f.write("No experiments found.\n")
+                        f.write("  No runs found.\n")
             except Exception as e:
                 f.write(f"Error inspecting artifacts: {e}\n")
 

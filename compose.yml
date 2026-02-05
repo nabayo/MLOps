@@ -96,6 +96,9 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./dataset:/app/dataset
       - ./configs:/app/configs
@@ -103,6 +106,7 @@ services:
       - ./picsellia_token:/app/picsellia_token:ro # Mount token file
       - ./experiments:/app/experiments # Local experiment outputs
       - ./scripts:/app/scripts:ro
+      - ./src:/app/src:ro
     networks:
       - mlops-network
     profiles:
@@ -147,6 +151,9 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./backups:/app/backups
       - ./scripts:/app/scripts:ro
