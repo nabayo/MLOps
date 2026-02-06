@@ -246,6 +246,29 @@ def load_model_from_registry(
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
 
+# Global preprocessing steps
+blur_step = None
+
+def get_blur_step():
+    """Lazy initialization of blur step."""
+    global blur_step
+    if blur_step is None:
+        try:
+            # Add parent directory to path if not already there
+            import sys
+            from pathlib import Path
+            parent_dir = str(Path(__file__).parent.parent)
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+            
+            from src.preprocessing import FastFaceBlurStep
+            print("Initializing FastFaceBlurStep...")
+            blur_step = FastFaceBlurStep(blur_kernel_size=51)
+        except ImportError as e:
+            print(f"Warning: Could not import preprocessing module: {e}")
+            return None
+    return blur_step
+
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     """
     Apply preprocessing pipeline to image.
@@ -259,20 +282,12 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     if not preprocessing_enabled:
         return image
 
-    # For now, use fast face blur with OpenCV (deface is too slow for API)
-    try:
-        # Add parent directory to path if not already there
-        import sys
-        from pathlib import Path
-        parent_dir = str(Path(__file__).parent.parent)
-        if parent_dir not in sys.path:
-            sys.path.insert(0, parent_dir)
-        
-        from src.preprocessing import FastFaceBlurStep
-        blur_step = FastFaceBlurStep(blur_kernel_size=51)
-        return blur_step.process(image)
-    except ImportError as e:
-        print(f"Warning: Could not import preprocessing module: {e}")
+    # Use global/cached step instance
+    step = get_blur_step()
+    
+    if step:
+        return step.process(image)
+    else:
         # Fallback to simple Gaussian blur if module not found
         return cv2.GaussianBlur(image, (51, 51), 0)
 
@@ -281,7 +296,13 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
 @app.on_event("startup")
 async def startup_event():
-    """Load default model on startup."""
+    """Load default model and preprocessing on startup."""
+    
+    # Initialize preprocessing if enabled
+    if preprocessing_enabled:
+        print("Pre-initializing face blur model...")
+        get_blur_step()
+
     model_name = os.getenv('MODEL_NAME', 'yolov11-finger-counting')
     model_stage = os.getenv('MODEL_STAGE', 'Production')
 

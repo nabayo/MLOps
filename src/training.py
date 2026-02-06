@@ -309,15 +309,13 @@ class YOLOTrainer:
         if results_csv.exists():
             mlflow.log_artifact(str(results_csv), 'metrics')
 
-        # Log model weights
-        best_weights = run_dir / 'weights' / 'best.pt'
-        last_weights = run_dir / 'weights' / 'last.pt'
-
-        if best_weights.exists():
-            mlflow.log_artifact(str(best_weights), 'weights')
-
-        if last_weights.exists():
-            mlflow.log_artifact(str(last_weights), 'weights')
+        # Log model weights (batch upload)
+        weights_dir = run_dir / 'weights'
+        if weights_dir.exists():
+            print(f"  Uploading weights directory: {weights_dir}")
+            mlflow.log_artifacts(str(weights_dir), 'weights')
+        else:
+            print("⚠ Weights directory not found")
 
         print("✓ All artifacts logged")
 

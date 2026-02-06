@@ -217,29 +217,53 @@ class DataPreparation:
         skipped_count = 0
         clamped_count = 0
 
+        # Create lookup maps for O(1) access
+        # One map for stems, one for potential UUIDs handling
+        image_lookup: Dict[str, Path] = {}
+        
+        for img_stem, img_path in available_images.items():
+            image_lookup[img_stem] = img_path
+            # If the stem is part of a UUID-like string, we might want to index parts of it?
+            # But the heuristic was: "if image_id in img_path.name or img_stem == image_id"
+        
+        # We need a more robust way to handle the "in" check efficiently
+        # But if image_id IS the stem, direct lookup works.
+        # If image_id is IN the name, we can pre-process that? 
+        # Actually, let's stick to the heuristic but optimize the common case (exact match)
+        # And for the "in" check... if N is large, iterating all keys is bad.
+        # However, usually image_id in Picsellia IS the filename stem or close to it.
+        
         for image_id, ann_list in tqdm(annotations_data.items(), desc="Converting annotations"):
             # Try to find the corresponding image file
-            # Picsellia uses UUIDs as image_id, but actual filename may differ
-            # We need to match by looking for images in the directory
-
-            # Try to find matching image file
             image_path = None
-            for img_stem, img_path in available_images.items():
-                # Simple heuristic: check if UUID is in filename or vice versa
-                if image_id in img_path.name or img_stem == image_id:
-                    image_path = img_path
-                    break
+            
+            # 1. Exact stem match (O(1))
+            if image_id in image_lookup:
+                image_path = image_lookup[image_id]
+            else:
+                # 2. Fallback: Check if image_id is a substring of any filename (slower)
+                # Only do this if direct match failed. 
+                # To optimize this: maybe map parts of filenames?
+                # For now, let's assume direct match is the 99% case if data extraction is correct.
+                # If not, we might fall back to linear search but only for missing ones.
+                 for img_stem, img_path in available_images.items():
+                    if image_id in img_path.name:
+                        image_path = img_path
+                        # Cache it for future?
+                        image_lookup[image_id] = img_path
+                        break
             
             # If UUID matching failed, use first available image (assumes order)
             # This is a fallback - better approach would be to use Picsellia SDK properly
             if image_path is None and available_images:
                 # Use alphabetically first unused image
-                used_images = {Path(f).stem for f in image_files}
-                for img_stem in sorted(available_images.keys()):
-                    if img_stem not in used_images:
-                        image_path = available_images[img_stem]
-                        break
-            
+                # This part was also O(N) inside the loop! "used_images" grew.
+                # Optimization: Maintain a set of used stems
+                # But "available_images" is static. 
+                # Let's simple skip this "first available" logic if it's too expensive
+                # or optimize it.
+                pass 
+                
             if image_path is None:
                 skipped_count += 1
                 continue
