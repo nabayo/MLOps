@@ -1,0 +1,53 @@
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies and Python 3.12
+# We use the deadsnakes PPA to get the specific Python version
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    curl \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y \
+    python3.12 \
+    python3.12-venv \
+    python3.12-dev \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pip for Python 3.12
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+
+# Make python3 command point to python3.12
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+# Using --no-cache-dir to keep image size down, though cache mount could be used if BuildKit enabled
+# We install torch explicitly with CUDA support first to ensure it picks up the right version if needed, 
+# although modern pip is good at this. Ultralytics will pull torch, let's just use requirements.txt
+# but ensure we have the right index if necessary. 
+# PyTorch website suggests: pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# However, the user requirements don't specify versions strict enough to break this potentially.
+# Let's try standard install first, usually it defaults to CUDA on linux if not specified cpu. 
+# If not, we can adjust.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src/ src/
+COPY configs/ configs/
+COPY main.py .
+
+# Default command
+CMD ["python", "main.py", "train", "--evaluate"]

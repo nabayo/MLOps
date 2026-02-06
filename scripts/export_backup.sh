@@ -25,11 +25,11 @@ echo ""
 
 # Run export
 if [ -n "$OUTPUT_NAME" ]; then
-    docker-compose run --rm \
+    DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose run --rm \
         -e BACKUP_NAME="$OUTPUT_NAME" \
         export python scripts/export_mlflow.py --output-dir /app/backups --name "$OUTPUT_NAME"
 else
-    docker-compose run --rm export
+    DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose run --rm export
 fi
 
 echo ""
