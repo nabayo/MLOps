@@ -1,6 +1,8 @@
 import os
 import sys
 import argparse
+import datetime
+import traceback
 import cv2
 import numpy as np
 from pathlib import Path
@@ -37,7 +39,7 @@ def find_test_image(dataset_dir: Path) -> Optional[Path]:
 
 def test_preprocessing(image_path: Path, output_dir: Path):
     print("\n" + "="*50)
-    print("🧪 Testing Preprocessing")
+    print("Testing Preprocessing")
     print("="*50)
     
     try:
@@ -46,13 +48,13 @@ def test_preprocessing(image_path: Path, output_dir: Path):
         # Read image
         img = cv2.imread(str(image_path))
         if img is None:
-            print(f"⚠️ cv2.imread failed for {image_path}, trying PIL...")
+            print(f"cv2.imread failed for {image_path}, trying PIL...")
             try:
                 from PIL import Image
                 pil_img = Image.open(image_path)
                 img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
             except Exception as e:
-                print(f"❌ Could not read image with PIL either: {e}")
+                print(f"Could not read image with PIL either: {e}")
                 return
 
         print(f"Original image shape: {img.shape}")
@@ -67,22 +69,61 @@ def test_preprocessing(image_path: Path, output_dir: Path):
         # Save output
         output_path = output_dir / f"preprocessed_{image_path.name}"
         cv2.imwrite(str(output_path), processed_img)
-        print(f"✅ Preprocessing result saved to: {output_path}")
+        print(f"Preprocessing result saved to: {output_path}")
         
     except ImportError:
-         print("❌ Could not import 'src.preprocessing'. Check path/dependencies.")
+         print("Could not import 'src.preprocessing'. Check path/dependencies.")
     except Exception as e:
-        print(f"❌ Preprocessing test failed: {e}")
-        import traceback
+        print(f"Preprocessing test failed: {e}")
         traceback.print_exc()
+
+    print("\n" + "="*50)
+    print("🔍 Searching for local model weights (*.pt)...")
+    print("="*50)
+    
+    found_any = False
+    # Walk typical directories
+    search_paths = [Path("experiments"), Path("models"), Path("runs"), Path("mlflow")]
+    # Also check current directory
+    search_paths.append(Path("."))
+
+    for search_root in search_paths:
+        if not search_root.exists():
+            continue
+            
+        print(f"Scanning {search_root}...")
+        try:
+             # Use concise walking for .pt files
+            for root, dirs, files in os.walk(search_root):
+                # Skip .git and typical huge dirs if recursing from .
+                if ".git" in dirs:
+                    dirs.remove(".git")
+                if "dataset" in dirs: # Skip dataset, unlikely to have trained weights and is huge
+                    dirs.remove("dataset")
+                if ".venv" in dirs:
+                    dirs.remove(".venv")
+                    
+                for file in files:
+                    if file.endswith(".pt"):
+                        full_path = Path(root) / file
+                        print(f"  FOUND: {full_path}")
+                        found_any = True
+        except Exception as e:
+             print(f"  Error scanning {search_root}: {e}")
+
+    if not found_any:
+        print("  ❌ No .pt files found in local directories.")
+    else:
+        print("  ✓ Local search complete.")
+
 
 def test_local_inference(image_path: Path, weights_path: Path):
     print("\n" + "="*50)
-    print("🧪 Testing Local Inference")
+    print("Testing Local Inference")
     print("="*50)
     
     if not weights_path.exists():
-        print(f"❌ Weights file not found: {weights_path}")
+        print(f"Weights file not found: {weights_path}")
         return
 
     try:
@@ -101,16 +142,16 @@ def test_local_inference(image_path: Path, weights_path: Path):
                 conf = float(box.conf[0])
                 print(f" - {cls_name} ({conf:.2f})")
                 
-        print("✅ Local inference successful")
+        print("Local inference successful")
         
     except ImportError:
-         print("❌ Could not import 'ultralytics'. Check installation.")
+         print("Could not import 'ultralytics'. Check installation.")
     except Exception as e:
-        print(f"❌ Local inference failed: {e}")
+        print(f"Local inference failed: {e}")
 
 def test_registry_inference(image_path: Path, model_name: str, stage: str):
     print("\n" + "="*50)
-    print("🧪 Testing Registry Inference")
+    print("Testing Registry Inference")
     print("="*50)
     
     try:
@@ -120,7 +161,7 @@ def test_registry_inference(image_path: Path, model_name: str, stage: str):
         load_model_from_registry(model_name, stage=stage)
         
         if current_model:
-            print("✅ Model loaded successfully from registry")
+            print("Model loaded successfully from registry")
             
             print(f"Running inference on: {image_path}")
             model = current_model
@@ -129,13 +170,13 @@ def test_registry_inference(image_path: Path, model_name: str, stage: str):
             for r in results:
                 print(f"found {len(r.boxes)} objects")
                 
-            print("✅ Registry inference successful")
+            print("Registry inference successful")
         else:
-            print("❌ Failed to load model (current_model is None)")
+            print("Failed to load model (current_model is None)")
             
     except Exception as e:
-        print(f"❌ Registry inference failed: {e}")
-        print("💡 Hint: Ensure MLflow is running and the model exists in the registry.")
+        print(f"Registry inference failed: {e}")
+        print("Hint: Ensure MLflow is running and the model exists in the registry.")
 
 def main():
     args = setup_args()
@@ -157,7 +198,7 @@ def main():
             image_path = find_test_image(PROJECT_ROOT / "dataset")
     
     if not image_path or not image_path.exists():
-        print("❌ No test image found. Please specify one with --image")
+        print("No test image found. Please specify one with --image")
         # Try to use a placeholder if absolute verified paths are missing, but for now just exit
         return
 
@@ -172,12 +213,103 @@ def main():
         if args.weights:
             test_local_inference(image_path, Path(args.weights))
         else:
-            print("\n⚠️ Skipping local inference test (no --weights provided)")
+            print("\nSkipping local inference test (no --weights provided)")
             print("  Use --weights /path/to/best.pt to test local model")
 
     # 4. Test Registry Inference
     if not args.no_registry:
         test_registry_inference(image_path, args.model_name, args.stage)
 
+
+def my_main():
+    print("\n" + "="*50)
+    print("Listing Experiments and Trained Weights")
+    print("="*50)
+
+    try:
+        from mlflow.tracking import MlflowClient
+        import mlflow
+        
+        # Ensure we are connected to the right URI
+        tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+        print(f"MLFLOW_TRACKING_URI: {tracking_uri}")
+        mlflow.set_tracking_uri(tracking_uri)
+        
+        client = MlflowClient()
+        
+        experiments = client.search_experiments()
+        print(f"Found {len(experiments)} experiments:")
+        
+        for exp in experiments:
+            print(f"\nExperiment: {exp.name} (ID: {exp.experiment_id})")
+            print("-" * 30)
+            
+            runs = client.search_runs(exp.experiment_id, order_by=["attribute.start_time DESC"])
+            if not runs:
+                print("  No runs found.")
+                continue
+                
+            for run in runs:
+                run_id = run.info.run_id
+                status = run.info.status
+                start_time = run.info.start_time
+                
+                # Format time
+                try:
+                    dt = datetime.datetime.fromtimestamp(start_time / 1000)
+                    time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    time_str = str(start_time)
+
+                print(f"  Run ID: {run_id}")
+                print(f"    Date: {time_str}")
+                print(f"    Status: {status}")
+                if "model_architecture" in run.data.params:
+                    print(f"    Arch: {run.data.params['model_architecture']}")
+                
+                # Check for weights
+                weights_found = []
+                
+                # 1. Try listing root artifacts (usually works)
+                try:
+                    artifacts_root = client.list_artifacts(run_id)
+                    weights_found.extend([a.path for a in artifacts_root if a.path.endswith('.pt')])
+                except Exception:
+                    # Root listing failed, not critical
+                    pass
+
+                # 2. Check for common weights using "Blind Download" trick
+                # list_artifacts('weights') fails with 404, so we test existence by trying to download
+                # to a temp directory.
+                potential_weights = ["weights/best.pt", "weights/last.pt"]
+                
+                import tempfile
+                import shutil
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    for weight_path in potential_weights:
+                        try:
+                            # We don't need the file, just want to know if it downloads without error
+                            # This is SLOW (downloads full file) but reliable given the API issues
+                            client.download_artifacts(run_id, weight_path, dst_path=temp_dir)
+                            weights_found.append(weight_path)
+                        except Exception:
+                            # Failed to download, so it likely doesn't exist
+                            pass
+
+                if weights_found:
+                    print(f"    Weights (verified in MLflow): {weights_found}")
+                else:
+                    print("    Weights: None found")
+                
+                print("")
+
+    except Exception as e:
+        print(f"Error listing experiments: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+
 if __name__ == "__main__":
-    main()
+    my_main()

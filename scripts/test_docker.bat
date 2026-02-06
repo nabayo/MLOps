@@ -4,7 +4,7 @@ setlocal
 :: Configuration
 set IMAGE_NAME=mlops-serving
 set CONTAINER_NAME=mlops-test-runner
-set NETWORK=mlops-network
+set NETWORK=mlops_mlops-network
 set DOCKERFILE=serving/Dockerfile
 
 :: Build the image
@@ -25,10 +25,11 @@ docker run --rm ^
     --network %NETWORK% ^
     -v "%CD%/dataset:/app/dataset" ^
     -v "%CD%/models:/app/models" ^
+    -v "%CD%/experiments:/app/experiments" ^
     -v "%CD%/test_results:/app/test_results" ^
     -e MLFLOW_TRACKING_URI="http://mlflow:5000" ^
-    -e AWS_ACCESS_KEY_ID="minio" ^
-    -e AWS_SECRET_ACCESS_KEY="minio123" ^
+    -e AWS_ACCESS_KEY_ID="minioadmin" ^
+    -e AWS_SECRET_ACCESS_KEY="minioadmin_password_change_me" ^
     -e MLFLOW_S3_ENDPOINT_URL="http://minio:9000" ^
     %IMAGE_NAME% ^
     python serving/test.py %*
