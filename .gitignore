@@ -57,3 +57,7 @@ minio_data/
 
 # Unwanted files
 *.zip
+*.png
+*.jpeg
+*.jpg
+*.gif
