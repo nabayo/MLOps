@@ -178,6 +178,15 @@ def main():
     # Serve mode (handled by separate serving/api.py)
     serve_parser = subparsers.add_parser('serve', help='Start serving API (use serving/api.py instead)')
 
+    # Clean mode
+    clean_parser = subparsers.add_parser('clean', help='Clean dataset directory')
+    clean_parser.add_argument(
+        '--training-config',
+        type=str,
+        default='configs/training_config.yaml',
+        help='Path to training configuration file'
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -189,6 +198,31 @@ def main():
     elif args.mode == 'serve':
         print("❌ Use 'python serving/api.py' or 'docker-compose up serving' to start the serving API")
         sys.exit(1)
+    elif args.mode == 'clean':
+        print("\n" + "=" * 80)
+        print("🧹 Cleaning Dataset")
+        print("=" * 80)
+        
+        # Load configuration
+        config = load_config()
+        
+        # Get dataset path using loader utils
+        from src.dataset_loader import get_dataset_download_path
+        dataset_path = get_dataset_download_path(config)
+        
+        if os.path.exists(dataset_path):
+            import shutil
+            try:
+                print(f"Removing dataset directory: {dataset_path}")
+                shutil.rmtree(dataset_path)
+                print("✓ Dataset removed successfully")
+            except Exception as e:
+                print(f"❌ Error removing dataset: {e}")
+        else:
+            print(f"⚠ Dataset directory not found: {dataset_path}")
+            
+        print("\n✅ Clean Complete!")
+        
     else:
         parser.print_help()
         sys.exit(1)

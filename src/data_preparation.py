@@ -141,9 +141,81 @@ class DataPreparation:
 
         print(f"Detected classes: {class_names_sorted}")
 
-        # Process each annotated image
+        # Check if YOLO labels were already exported by SDK
+        # SDK usually puts them in a zip file/subdirectory
+        import zipfile
+        
+        # 1. Search for any zip file containing "YOLO" or just any zip in the dataset path (recursive)
+        found_zip_files = list(self.dataset_path.rglob("*.zip"))
+        
+        if found_zip_files:
+            print(f"found zip files: {found_zip_files}")
+            for zip_file in found_zip_files:
+                try:
+                    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                        # Extract to dataset path
+                        print(f"Extracting {zip_file}...")
+                        zip_ref.extractall(self.dataset_path)
+                except Exception as e:
+                    print(f"Warning: Failed to extract {zip_file}: {e}")
+        
+        # 2. Search for any .txt file in the download path (recursive now, to catch extracted files)
+        sdk_exported_labels = list(self.dataset_path.rglob("*.txt"))
+        
+        # Filter out classes.txt or non-label files if possible, but usually safe
+        sdk_exported_labels = [f for f in sdk_exported_labels if f.name != 'classes.txt']
+
+        # If we found many txt files, assume they are the labels
+        use_sdk_labels = len(sdk_exported_labels) > len(available_images) * 0.5
+        
+        if use_sdk_labels:
+            print("✓ Found SDK-exported YOLO labels. Skipping manual conversion.")
+            converted_count = 0
+            
+            for img_stem, img_path in tqdm(available_images.items(), desc="Processing SDK labels"):
+                # Find matching txt file
+                # SDK name matches image name usually
+                label_path = self.dataset_path / (img_stem + ".txt")
+                
+                if not label_path.exists():
+                    # Try looking for UUID match if filename match fails?
+                    # For now assume Picsellia SDK matched them correctly
+                    continue
+                    
+                # Copy image to YOLO directory
+                dst_img = self.images_path / img_path.name
+                dst_img.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(img_path, dst_img)
+                image_files.append(str(dst_img))
+                
+                # Copy label to YOLO directory
+                label_filename = img_path.stem + '.txt'
+                dst_label = self.labels_path / label_filename
+                dst_label.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(label_path, dst_label)
+                label_files.append(str(dst_label))
+                
+                converted_count += 1
+                
+            print(f"✓ Processed {converted_count} images using SDK labels")
+            
+            # Use class names from file if available, else use inferred
+            classes_file = self.dataset_path / "classes.txt"
+            if classes_file.exists():
+                with open(classes_file, 'r') as f:
+                    self.class_names = [line.strip() for line in f.readlines() if line.strip()]
+            else:
+                 self.class_names = class_names_sorted if class_names_sorted else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+
+            return {
+                'images': image_files,
+                'labels': label_files
+            }
+
+        # Process each annotated image (Manual Fallback)
         converted_count = 0
         skipped_count = 0
+        clamped_count = 0
 
         for image_id, ann_list in tqdm(annotations_data.items(), desc="Converting annotations"):
             # Try to find the corresponding image file
@@ -157,7 +229,7 @@ class DataPreparation:
                 if image_id in img_path.name or img_stem == image_id:
                     image_path = img_path
                     break
-
+            
             # If UUID matching failed, use first available image (assumes order)
             # This is a fallback - better approach would be to use Picsellia SDK properly
             if image_path is None and available_images:
@@ -167,7 +239,7 @@ class DataPreparation:
                     if img_stem not in used_images:
                         image_path = available_images[img_stem]
                         break
-
+            
             if image_path is None:
                 skipped_count += 1
                 continue
@@ -196,14 +268,38 @@ class DataPreparation:
                     h = rect.get('h', 0)
                     label = rect.get('label')
 
-                    if w == 0 or h == 0 or label not in label_to_id:
+                    if w <= 0 or h <= 0 or label not in label_to_id:
                         continue
 
-                    # Convert to YOLO format: [x_center, y_center, width,height] (normalized)
+                    # Convert to YOLO format: [x_center, y_center, width, height] (normalized)
                     x_center = (x + w / 2) / img_width
                     y_center = (y + h / 2) / img_height
                     norm_width = w / img_width
                     norm_height = h / img_height
+                    
+                    # Check if clamping is needed
+                    is_invalid = (
+                        x_center > 1.0 or y_center > 1.0 or 
+                        norm_width > 1.0 or norm_height > 1.0 or
+                        x_center < 0 or y_center < 0
+                    )
+                    
+                    if is_invalid:
+                        clamped_count += 1
+                        
+                        # Clamp width/height first
+                        norm_width = min(max(norm_width, 0.0), 1.0)
+                        norm_height = min(max(norm_height, 0.0), 1.0)
+                        
+                        # Clamp center
+                        x_center = min(max(x_center, 0.0), 1.0)
+                        y_center = min(max(y_center, 0.0), 1.0)
+                        
+                        # Use a small epsilon to avoid edge cases
+                        x_center = min(x_center, 0.999999)
+                        y_center = min(y_center, 0.999999)
+                        norm_width = min(norm_width, 0.999999)
+                        norm_height = min(norm_height, 0.999999)
 
                     # Get class ID
                     class_id = label_to_id[label]
@@ -233,6 +329,8 @@ class DataPreparation:
         print(f"✓ Converted {converted_count} images and {len(label_files)} labels")
         if skipped_count > 0:
             print(f"⚠ Skipped {skipped_count} images (missing files)")
+        if clamped_count > 0:
+            print(f"⚠ Clamped/Fixed {clamped_count} annotations that were out of bounds")
 
         # Store class names
         self.class_names = class_names_sorted if class_names_sorted else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
