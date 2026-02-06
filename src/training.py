@@ -126,6 +126,7 @@ class YOLOTrainer:
             # Training
             'epochs': self.training_params['epochs'],
             'batch': self.training_params['batch_size'],
+            'patience': self.training_params['patience'],
             'workers': self.training_params['workers'],
 
             # Optimizer
@@ -153,6 +154,9 @@ class YOLOTrainer:
             'mosaic': self.augmentation['mosaic'],
             'mixup': self.augmentation['mixup'],
             'copy_paste': self.augmentation['copy_paste'],
+
+            # Seed (Critical for reproducibility)
+            'seed': self.dataset_config['seed'],
 
             # Other
             'amp': self.training_params['amp'],
@@ -201,7 +205,7 @@ class YOLOTrainer:
             mlflow.log_param(f"aug_{key}", value)
 
         # System info
-        mlflow.log_param("device", training_args.get('device', 'auto'))
+        mlflow.log_param("config_device", training_args.get('device', 'auto'))
         mlflow.log_param("cuda_available", torch.cuda.is_available())
         if torch.cuda.is_available():
             mlflow.log_param("gpu_name", torch.cuda.get_device_name(0))

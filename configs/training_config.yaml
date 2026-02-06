@@ -35,7 +35,10 @@ dataset:
 # =====================
 training:
   # Number of epochs
-  epochs: 100
+  epochs: 300
+
+  # Patience / Early Stopping
+  patience: 30
   
   # Batch size (adjust based on GPU memory)
   batch_size: 8
