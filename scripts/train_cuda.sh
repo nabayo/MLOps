@@ -14,11 +14,11 @@ fi
 
 # Build training image if needed
 echo "🔨 Building CUDA training image..."
-docker-compose -f compose.yml -f compose.cuda.yml build training
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose -f compose.yml -f compose.cuda.yml build training
 
 # Run training
 echo "🏋️  Running training on GPU..."
-docker-compose -f compose.yml -f compose.cuda.yml run --rm training python main.py train --evaluate
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose -f compose.yml -f compose.cuda.yml run --rm training python main.py train --evaluate
 
 echo ""
 echo "✅ Training complete!"

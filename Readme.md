@@ -93,7 +93,7 @@ open http://localhost:5000
 
 ```bash
 # Install dependencies (local development)
-pip install -r requirements.txt
+pip install --ignore-installed -r requirements.txt
 
 # Set MLflow tracking URI
 export MLFLOW_TRACKING_URI=http://localhost:5000
@@ -376,7 +376,7 @@ MLOps/
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+pip install --ignore-installed -r requirements.txt
 
 # Start only MLflow infrastructure
 docker-compose up -d mlflow postgres minio

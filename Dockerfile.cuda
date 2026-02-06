@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 WORKDIR /app
 
@@ -34,15 +34,9 @@ RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
 COPY requirements.txt .
 
 # Install Python dependencies
-# Using --no-cache-dir to keep image size down, though cache mount could be used if BuildKit enabled
-# We install torch explicitly with CUDA support first to ensure it picks up the right version if needed, 
-# although modern pip is good at this. Ultralytics will pull torch, let's just use requirements.txt
-# but ensure we have the right index if necessary. 
-# PyTorch website suggests: pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-# However, the user requirements don't specify versions strict enough to break this potentially.
-# Let's try standard install first, usually it defaults to CUDA on linux if not specified cpu. 
-# If not, we can adjust.
-RUN pip install --no-cache-dir -r requirements.txt
+# Optimized with BuildKit cache mount and ignore-installed to prevent blinker conflict
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --ignore-installed -r requirements.txt
 
 # Copy application code
 COPY src/ src/

@@ -16,7 +16,7 @@ COPY requirements.txt .
 # Install Python dependencies with pip cache mount for faster rebuilds
 # --mount=type=cache uses BuildKit cache to persist pip cache between builds
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --ignore-installed -r requirements.txt
 
 # Copy application code
 COPY src/ src/
