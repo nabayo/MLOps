@@ -610,6 +610,34 @@ async function loadModel(modelName, version) {
     }
 }
 
+async function loadRunWeights(runId, artifactPath) {
+    try {
+        showToast(`Loading weights ${artifactPath}...`, 'info');
+
+        const response = await fetch(`${API_BASE_URL}/models/load_run_weights?run_id=${runId}&artifact_path=${artifactPath}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load run weights');
+        }
+
+        const result = await response.json();
+
+        showToast(`Loaded ${artifactPath} successfully!`, 'success');
+
+        // Update current model info
+        await loadCurrentModel();
+
+        // Switch to analysis tab to test? Or just stay.
+        // Let's stay but maybe scroll top?
+
+    } catch (error) {
+        console.error('Error loading run weights:', error);
+        showToast('Failed to load weights: ' + error.message, 'error');
+    }
+}
+
 // ============================================================================
 // Skip Frame Configuration
 // ============================================================================
@@ -672,6 +700,7 @@ async function loadExperiments() {
                                 <th>Run Name</th>
                                 <th>Status</th>
                                 <th>Architecture</th>
+                                <th>Weights</th>
                                 <th>mAP@50-95</th>
                                 <th>Precision</th>
                                 <th>Recall</th>
@@ -684,6 +713,18 @@ async function loadExperiments() {
                                     <td><span class="run-name" title="${run.run_id}">${run.run_name}</span></td>
                                     <td><span class="badge badge-${run.status.toLowerCase()}">${run.status}</span></td>
                                     <td>${run.params?.model_architecture || 'N/A'}</td>
+                                    <td>
+                                        <div class="weights-actions">
+                                            ${(run.available_weights || []).map(w => `
+                                                <button class="btn btn-xs btn-outline" 
+                                                        onclick="loadRunWeights('${run.run_id}', '${w}')"
+                                                        title="Load ${w}">
+                                                    ${w.split('/').pop()}
+                                                </button>
+                                            `).join('')}
+                                            ${(!run.available_weights || run.available_weights.length === 0) ? '<span class="text-muted">-</span>' : ''}
+                                        </div>
+                                    </td>
                                     <td>${run.metrics?.['mAP50-95']?.toFixed(4) || 'N/A'}</td>
                                     <td>${run.metrics?.precision?.toFixed(4) || 'N/A'}</td>
                                     <td>${run.metrics?.recall?.toFixed(4) || 'N/A'}</td>

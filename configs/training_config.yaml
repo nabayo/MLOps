@@ -4,9 +4,8 @@
 # YOLO Model Configuration
 # =====================
 model:
-  # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
-  # Easily extensible for future versions (e.g., yolo26n when available)
-  architecture: "yolo26s"  # Nano for >10 FPS
+  # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolo26n, yolo26s, yolo26m, yolo26l, yolo26x
+  architecture: "yolo26s"
   
   # Pretrained weights (set to null to train from scratch)
   pretrained: true
@@ -16,14 +15,14 @@ model:
 # =====================
 dataset:
   # Dataset splits (must sum to 1.0)
-  # Default: 80% train, 10% val, 10% test
+  # Default: 70% train, 15% val, 15% test
   split_ratios:
     train: 0.7
     val: 0.15
     test: 0.15
   
   # Random seed for reproducibility
-  seed: 42
+  seed: 54
   
   # Image size for training (must be multiple of 32)
   img_size: 640
@@ -45,7 +44,7 @@ training:
   workers: 8
   
   # Initial learning rate
-  lr0: 0.01
+  lr0: 0.1
   
   # Final learning rate (lr0 * lrf)
   lrf: 0.01
@@ -54,22 +53,22 @@ training:
   momentum: 0.937
   
   # Optimizer weight decay
-  weight_decay: 0.0005
+  weight_decay: 0.0
   
   # Warmup epochs
-  warmup_epochs: 3.0
+  warmup_epochs: 0.0
   
   # Warmup initial momentum
-  warmup_momentum: 0.8
+  warmup_momentum: 0.0
   
   # Warmup initial bias lr
-  warmup_bias_lr: 0.1
+  warmup_bias_lr: 0.0
   
   # Use automatic mixed precision (AMP)
-  amp: true
+  amp: false
   
   # Close mosaic augmentation in final N epochs
-  close_mosaic: 10
+  close_mosaic: 0
 
 # =====================
 # Data Augmentation

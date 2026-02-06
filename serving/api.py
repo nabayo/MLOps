@@ -13,6 +13,8 @@ import os
 import io
 import json
 import base64
+import tempfile
+import shutil
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -112,6 +114,7 @@ class RunInfo(BaseModel):
     metrics: Dict[str, float]
     params: Dict[str, str]
     tags: Dict[str, str]
+    available_weights: List[str] = []
 
 
 # Helper functions
@@ -408,7 +411,9 @@ async def list_experiments() -> List[Dict[str, Any]]:
                     'status': run.info.status,
                     'metrics': metrics,
                     'params': dict(run.data.params),
-                    'tags': dict(run.data.tags)
+                    'params': dict(run.data.params),
+                    'tags': dict(run.data.tags),
+                    'available_weights': check_run_weights(run.info.run_id)
                 })
 
             experiments_info.append({
@@ -432,6 +437,103 @@ async def set_skip_frames(config: SkipFrameConfig):
     FRAME_COUNTER = 0  # Reset counter when config changes
     print(f"✓ Skip frame limit set to: {SKIP_FRAME_LIMIT}")
     return {"status": "success", "skip_frames": SKIP_FRAME_LIMIT}
+
+
+def check_run_weights(run_id: str) -> List[str]:
+    """
+    Check for available weights for a specific run.
+    Uses 'blind download' to verify existence.
+    """
+    verified_weights = []
+    potential_weights = ["weights/best.pt", "weights/last.pt", "best.pt", "last.pt"]
+    
+    # We use a single temp directory for all checks to keep it clean
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for weight_path in potential_weights:
+            try:
+                # Blind download attempt
+                client.download_artifacts(run_id, weight_path, dst_path=temp_dir)
+                verified_weights.append(weight_path)
+            except Exception:
+                # Failed means likely doesn't exist
+                pass
+                
+    return verified_weights
+
+
+@app.post("/models/load_run_weights")
+async def load_run_weights(
+    run_id: str = Query(..., description="MLflow Run ID"),
+    artifact_path: str = Query(..., description="Path to weight file (e.g., weights/best.pt)")
+):
+    """
+    Load a model from a specific run's weight file.
+    """
+    global current_model, current_model_info
+    
+    print(f"Loading model from run: {run_id}, path: {artifact_path}")
+    
+    try:
+        run = client.get_run(run_id)
+        
+        # Download the specific artifact
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
+            local_path = client.download_artifacts(run_id, artifact_path, dst_path=os.path.dirname(tmp.name))
+            # download_artifacts returns the directory if we passed a dir, OR the full path?
+            # It actually downloads to dst_path. If dst_path is a dir, it preserves structure?
+            # Let's trust standard behavior: download to a temp dir is safer.
+            
+        # Better approach: Download to a dedicated temp dir for this load
+        # We need the file to persist for YOLO? Yes.
+        # We can store it in a 'models_cache' dir
+        cache_dir = os.path.join(os.getcwd(), "models_cache", run_id)
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        local_path = client.download_artifacts(run_id, artifact_path, dst_path=cache_dir)
+        # If artifact_path is 'weights/best.pt', it's at cache_dir/weights/best.pt
+        full_path = os.path.join(cache_dir, artifact_path)
+        
+        if not os.path.exists(full_path):
+             # Try finding it if structure wasn't preserved exactly as expected
+             # download_artifacts return value is the local path
+             full_path = local_path
+        
+        print(f"✓ Downloaded to: {full_path}")
+        
+        # Load YOLO model
+        model = YOLO(full_path)
+        
+        # Extract metrics
+        metrics = {}
+        for key, value in run.data.metrics.items():
+            if 'final_' in key:
+                metrics[key.replace('final_', '')] = value
+                
+        # Update state
+        model_info = {
+            'name': f"Run {run_id[:8]}",
+            'version': artifact_path,
+            'stage': 'Experiment',
+            'architecture': run.data.params.get('model_architecture', 'unknown'),
+            'metrics': metrics,
+            'run_id': run_id,
+            'loaded_at': datetime.now().isoformat()
+        }
+        
+        current_model = model
+        current_model_info = model_info
+        
+        return {
+            "status": "success", 
+            "message": f"Loaded {artifact_path} from run {run_id}",
+            "model_info": model_info
+        }
+
+    except Exception as e:
+        print(f"❌ Load failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load weights: {str(e)}")
 
 
 @app.post("/predict", response_model=PredictionResponse)

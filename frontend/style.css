@@ -718,3 +718,25 @@ body {
     color: var(--text-secondary);
     font-size: 0.875rem;
 }
+
+/* ============================================================================
+   Weights Selection
+   ============================================================================ */
+.weights-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.text-muted {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.875rem;
+}
