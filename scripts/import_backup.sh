@@ -33,7 +33,7 @@ echo "🔄 Importing MLflow data from: $BACKUP_FILE"
 echo ""
 
 # Run import with remaining arguments
-docker-compose run --rm \
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose run --rm \
     -e BACKUP_FILE="$BACKUP_FILE" \
     import python scripts/import_mlflow.py /app/backups/"$BACKUP_FILE" "$@"
 
