@@ -4,28 +4,30 @@ MLOps Pipeline Orchestrator
 Main entry point for training, evaluation, and serving.
 """
 
-from typing import Any, Dict
+from typing import Any
+from pathlib import Path
 
 import argparse
 import os
 import sys
-from pathlib import Path
-
+import shutil
 import yaml
+
 from dotenv import load_dotenv
 
 from src.config import load_config
 from src.picsellia import load_data
-from src.data_preparation import DataPreparation
 from src.training import YOLOTrainer
 from src.evaluation import YOLOEvaluator
+from src.data_preparation import DataPreparation
+from src.dataset_loader import get_dataset_download_path
 
 
 def load_training_config(
     config_path: str = "configs/training_config.yaml",
 ) -> dict[str, Any]:
     """Load training configuration from YAML file."""
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -85,7 +87,8 @@ def run_training(args: argparse.Namespace) -> None:
     print("✅ Pipeline Complete!")
     print("=" * 80)
     print(
-        f"\n🔗 View results in MLflow UI: {os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000')}"
+        f"\n🔗 View results in MLflow UI:\
+             {os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000')}"
     )
 
 
@@ -206,18 +209,14 @@ def main():
         config = load_config()
 
         # Get dataset path using loader utils
-        from src.dataset_loader import get_dataset_download_path
-
         dataset_path = get_dataset_download_path(config)
 
         if os.path.exists(dataset_path):
-            import shutil
-
             try:
                 print(f"Removing dataset directory: {dataset_path}")
                 shutil.rmtree(dataset_path)
                 print("✓ Dataset removed successfully")
-            except Exception as e:
+            except NotImplementedError as e:
                 print(f"❌ Error removing dataset: {e}")
         else:
             print(f"⚠ Dataset directory not found: {dataset_path}")

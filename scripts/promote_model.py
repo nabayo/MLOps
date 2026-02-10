@@ -19,7 +19,7 @@ def promote_to_production():
             name=model_name, version=version, stage="Production"
         )
         print("Success!")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"Failed: {e}")
 
     # Check search with filter
@@ -27,7 +27,7 @@ def promote_to_production():
     try:
         res = client.search_registered_models(f"name='{model_name}'")
         print(f"Filter Search Found: {len(res)}")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"Filter Search Failed: {e}")
 
 

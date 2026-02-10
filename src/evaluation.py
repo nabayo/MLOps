@@ -248,5 +248,5 @@ class YOLOEvaluator:
                 mlflow.log_artifact(conf_dist_path, "test_visualizations")
                 os.remove(conf_dist_path)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print(f"⚠ Could not create confidence distribution: {e}")

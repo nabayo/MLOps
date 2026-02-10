@@ -153,7 +153,7 @@ class DataPreparation:
                         # Extract to dataset path
                         print(f"Extracting {zip_file}...")
                         zip_ref.extractall(self.dataset_path)
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print(f"Warning: Failed to extract {zip_file}: {e}")
 
         # 2. Search for any .txt file in the download path (recursive now, to catch extracted files)
@@ -278,7 +278,7 @@ class DataPreparation:
             try:
                 with Image.open(image_path) as img:
                     img_width, img_height = img.size
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"Warning: Could not read image {image_path}: {e}")
                 skipped_count += 1
                 continue

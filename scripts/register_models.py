@@ -18,7 +18,7 @@ def register_all_models():
     try:
         experiments = client.search_experiments()
         print(f"✅ Found {len(experiments)} experiments.")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"❌ Failed to connect: {e}")
         return
 

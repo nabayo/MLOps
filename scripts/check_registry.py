@@ -1,16 +1,24 @@
-import os
+"""
+Check MLflow registry for registered models.
+"""
 
+import os
 import mlflow
+
 from mlflow.tracking import MlflowClient
 
 
-def check_registry():
+def check_registry() -> None:
+    """
+    Check MLflow registry for registered models.
+    """
+
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
 
     output_path = "/app/experiments/registry_dump.txt"
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(f"Registry Check at {tracking_uri}\n")
         f.write("=" * 50 + "\n")
 
@@ -33,8 +41,8 @@ def check_registry():
             if len(models) == 0:
                 f.write("\nRegistry is empty (via search).\n")
 
-            # DEBUG: Check artifacts for the first available run to see why registration might be failing
-            # DEBUG: Check artifacts for all runs
+            # DEBUG: Check artifacts for the all run
+            #        to see why registration might be failing
             try:
                 f.write("\n=== Artifact Inspection (All Runs) ===\n")
                 experiments = client.search_experiments()
@@ -59,14 +67,14 @@ def check_registry():
                                                 f.write(f"        - {s.path}\n")
                                 else:
                                     f.write("    (No artifacts found)\n")
-                            except Exception as e:
+                            except Exception as e:  # pylint: disable=broad-except
                                 f.write(f"    Error listing artifacts: {e}\n")
                     else:
                         f.write("  No runs found.\n")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 f.write(f"Error inspecting artifacts: {e}\n")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             f.write(f"\nError searching models: {e}\n")
 
     print(f"Registry dump written to {output_path}")

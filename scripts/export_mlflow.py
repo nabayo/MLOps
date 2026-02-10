@@ -14,6 +14,8 @@ import sys
 import json
 import zipfile
 import shutil
+import traceback
+
 from pathlib import Path
 from datetime import datetime
 
@@ -79,7 +81,7 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
             experiments_data.append(exp_data)
             print(f"  ✓ Experiment: {exp.name} (ID: {exp.experiment_id})")
 
-        with open(experiments_dir / "experiments.json", "w") as f:
+        with open(experiments_dir / "experiments.json", "w", encoding="utf-8") as f:
             json.dump(experiments_data, f, indent=2)
 
         # Export runs
@@ -112,7 +114,7 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                     },
                 }
 
-                with open(run_dir / "run.json", "w") as f:
+                with open(run_dir / "run.json", "w", encoding="utf-8") as f:
                     json.dump(run_data, f, indent=2)
 
                 # Export artifacts
@@ -121,13 +123,14 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                     artifacts_dir.mkdir(exist_ok=True)
 
                     # Download all artifacts for this run
-                    local_artifact_path = client.download_artifacts(
+                    _local_artifact_path = client.download_artifacts(
                         run.info.run_id, "", dst_path=str(artifacts_dir)
                     )
 
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print(
-                        f"    ⚠ Warning: Could not download artifacts for run {run.info.run_id}: {e}"
+                        f"    ⚠ Warning:\
+                             Could not download artifacts for run {run.info.run_id}: {e}"
                     )
 
                 print(f"  ✓ Run: {run.info.run_name or run.info.run_id[:8]}")
@@ -168,10 +171,10 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                 models_data.append(model_data)
                 print(f"  ✓ Model: {model.name} ({len(model_versions)} versions)")
 
-            with open(models_dir / "models.json", "w") as f:
+            with open(models_dir / "models.json", "w", encoding="utf-8") as f:
                 json.dump(models_data, f, indent=2)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print(f"  ⚠ Warning: Could not export models: {e}")
 
         # Create metadata file
@@ -183,13 +186,13 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
             "total_models": len(models_data) if "models_data" in locals() else 0,
         }
 
-        with open(temp_dir / "metadata.json", "w") as f:
+        with open(temp_dir / "metadata.json", "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         # Create zip file
         print(f"\n📦 Creating backup archive: {zip_path.name}")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(temp_dir):
+            for root, _dirs, files in os.walk(temp_dir):
                 for file in files:
                     file_path = Path(root) / file
                     arcname = file_path.relative_to(temp_dir)
@@ -237,9 +240,8 @@ if __name__ == "__main__":
     try:
         backup_path = export_mlflow_data(args.output_dir, args.name)
         sys.exit(0)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"\n❌ Export failed: {e}", file=sys.stderr)
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)

@@ -33,6 +33,8 @@ from mlflow.tracking import MlflowClient
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.preprocessing import FastFaceBlurStep
+
 # Load environment
 load_dotenv()
 
@@ -250,7 +252,7 @@ def load_model_from_registry(
         )
         return model_info
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
 
@@ -267,8 +269,6 @@ def get_blur_step():
             parent_dir = str(Path(__file__).parent.parent)
             if parent_dir not in sys.path:
                 sys.path.insert(0, parent_dir)
-
-            from src.preprocessing import FastFaceBlurStep
 
             print("Initializing FastFaceBlurStep...")
             blur_step = FastFaceBlurStep(blur_kernel_size=51)
@@ -319,7 +319,7 @@ async def startup_event():
     try:
         load_model_from_registry(model_name, stage=model_stage)
         print(f"✓ Default model loaded: {model_name} ({model_stage})")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"⚠ Could not load default model: {e}")
         print("  API will start without a loaded model")
 
@@ -403,7 +403,7 @@ async def list_models() -> list[dict[str, Any]]:
 
         return models_info
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
 
 
@@ -467,7 +467,7 @@ async def list_experiments() -> list[dict[str, Any]]:
 
         return experiments_info
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(
             status_code=500, detail=f"Failed to list experiments: {str(e)}"
         )
@@ -574,7 +574,7 @@ async def load_run_weights(
             "model_info": model_info,
         }
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"❌ Load failed: {e}")
 
         traceback.print_exc()
@@ -728,7 +728,7 @@ async def predict(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"❌ Prediction error: {e}")
 
         traceback.print_exc()

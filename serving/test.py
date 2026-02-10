@@ -108,7 +108,7 @@ def list_models() -> dict[str, tuple[str, str, list[str]]]:
                 if weights_found:
                     dict_weights[run_id] = (exp.name, status, weights_found)
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"Error listing experiments: {e}")
         traceback.print_exc()
 
@@ -202,11 +202,11 @@ def my_main():
                                     )
                                     print(f"         - {cls_name}: {conf:.2f}")
 
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-except
                         print(f"    ❌ Inference failed: {e}")
                         traceback.print_exc()
 
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print(f"    ❌ Failed to download weights: {e}")
 
         print("*" * 60)

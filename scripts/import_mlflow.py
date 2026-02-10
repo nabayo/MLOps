@@ -16,6 +16,8 @@ import sys
 import json
 import zipfile
 import shutil
+import traceback
+
 from pathlib import Path
 from datetime import datetime
 
@@ -57,7 +59,7 @@ def import_mlflow_data(
             zipf.extractall(temp_dir)
 
         # Load metadata
-        with open(temp_dir / "metadata.json", "r") as f:
+        with open(temp_dir / "metadata.json", "r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         print(f"📅 Backup date: {metadata['export_date']}")
@@ -94,7 +96,7 @@ def import_mlflow_data(
         # Import experiments
         print("\n📦 Importing experiments...")
         experiments_file = temp_dir / "experiments" / "experiments.json"
-        with open(experiments_file, "r") as f:
+        with open(experiments_file, "r", encoding="utf-8") as f:
             experiments_data = json.load(f)
 
         experiment_id_mapping = {}  # old_id -> new_id
@@ -135,7 +137,7 @@ def import_mlflow_data(
             if not run_file.exists():
                 continue
 
-            with open(run_file, "r") as f:
+            with open(run_file, "r", encoding="utf-8") as f:
                 run_data = json.load(f)
 
             run_id = run_data["info"]["run_id"]
@@ -177,7 +179,7 @@ def import_mlflow_data(
                 # Upload artifacts
                 artifacts_dir = run_dir / "artifacts"
                 if artifacts_dir.exists():
-                    for root, dirs, files in os.walk(artifacts_dir):
+                    for root, _dirs, files in os.walk(artifacts_dir):
                         for file in files:
                             file_path = Path(root) / file
                             rel_path = file_path.relative_to(artifacts_dir)
@@ -194,7 +196,7 @@ def import_mlflow_data(
                                     run.info.run_id, str(file_path), artifact_path
                                 )
                                 stats["artifacts_uploaded"] += 1
-                            except Exception as e:
+                            except Exception as e:  # pylint: disable=broad-except
                                 print(
                                     f"    ⚠ Warning: Could not upload {rel_path}: {e}"
                                 )
@@ -223,7 +225,7 @@ def import_mlflow_data(
         models_file = temp_dir / "models" / "models.json"
 
         if models_file.exists():
-            with open(models_file, "r") as f:
+            with open(models_file, "r", encoding="utf-8") as f:
                 models_data = json.load(f)
 
             # Get existing models
@@ -291,7 +293,7 @@ def import_mlflow_data(
 
                             print(f"    ✓ Created version {mv.version}")
                             stats["model_versions_created"] += 1
-                        except Exception as e:
+                        except Exception as e:  # pylint: disable=broad-except
                             print(
                                 f"    ⚠ Warning: Could not create version {version}: {e}"
                             )
@@ -308,17 +310,21 @@ def import_mlflow_data(
             print("✅ Import Complete!")
         print("=" * 70)
         print(
-            f"📦 Experiments: {stats['experiments_created']} created, {stats['experiments_skipped']} skipped"
+            f"📦 Experiments: {stats['experiments_created']} created,\
+                {stats['experiments_skipped']} skipped"
         )
         print(
-            f"🏃 Runs: {stats['runs_created']} created, {stats['runs_skipped']} skipped"
+            f"🏃 Runs: {stats['runs_created']} created,\
+                {stats['runs_skipped']} skipped"
         )
         print(f"🎯 Models: {stats['models_created']} created")
         print(
-            f"📦 Model Versions: {stats['model_versions_created']} created, {stats['model_versions_skipped']} skipped"
+            f"📦 Model Versions: {stats['model_versions_created']} created,\
+                {stats['model_versions_skipped']} skipped"
         )
         print(
-            f"📁 Artifacts: {stats['artifacts_uploaded']} uploaded, {stats['artifacts_skipped']} skipped"
+            f"📁 Artifacts: {stats['artifacts_uploaded']} uploaded,\
+                {stats['artifacts_skipped']} skipped"
         )
 
         return stats
@@ -357,13 +363,12 @@ if __name__ == "__main__":
         mlflow.set_tracking_uri(args.tracking_uri)
 
     try:
-        stats = import_mlflow_data(
+        _stats = import_mlflow_data(
             args.backup_file, skip_existing=not args.overwrite, dry_run=args.dry_run
         )
         sys.exit(0)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"\n❌ Import failed: {e}", file=sys.stderr)
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)

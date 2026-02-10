@@ -372,7 +372,7 @@ class YOLOTrainer:
                     f"Run ID: {run_id}\n"
                     f"mAP@50-95: {final_metrics.get('mAP50-95', 'N/A'):.4f}",
                 )
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"  ⚠ Description update failed (non-critical): {e}")
 
             # Promote to stage if configured
@@ -386,12 +386,12 @@ class YOLOTrainer:
                         archive_existing_versions=True,
                     )
                     print(f"  ✓ Model promoted to '{auto_promote_stage}' stage")
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print(f"  ⚠ Promotion failed: {e}")
 
             print(f"✅ Model successfully registered: {model_name} v{latest_version}")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print(f"⚠ Model registration failed: {e}")
             import traceback
 
@@ -412,7 +412,7 @@ class YOLOTrainer:
                 if experiment.lifecycle_stage == "deleted":
                     print(f"♻ Restoring deleted experiment: {experiment_name}")
                     client.restore_experiment(experiment.experiment_id)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print(f"⚠ Note on experiment setup: {e}")
 
         # Set as active (creates if doesn't exist)

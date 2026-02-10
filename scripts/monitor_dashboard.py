@@ -1,14 +1,31 @@
+"""
+MLflow Monitoring Dashboard
+
+Usage:
+    docker compose run --rm mlflow-server python scripts/monitor_dashboard.py
+
+    docker compose run --rm mlflow-server python scripts/monitor_dashboard.py --export-all
+"""
+
+from typing import Any
+from datetime import datetime
+
 import os
 import sys
+import psycopg2
+
+import pandas as pd
+
 import mlflow
 from mlflow.tracking import MlflowClient
-import pandas as pd
-import psycopg2
-from datetime import datetime
 
 
 # --- Colors for TUI ---
 class Colors:
+    """
+    Terminal colors for the dashboard.
+    """
+
     HEADER = "\033[95m"
     BLUE = "\033[94m"
     CYAN = "\033[96m"
@@ -20,55 +37,87 @@ class Colors:
     UNDERLINE = "\033[4m"
 
 
-def print_header(text):
+def print_header(text: str) -> None:
+    """
+    Print a header for the dashboard.
+    """
     print(f"\n{Colors.HEADER}{Colors.BOLD}=== {text} ==={Colors.ENDC}")
 
 
-def print_sub(text):
+def print_sub(text: str) -> None:
+    """
+    Print a sub-header for the dashboard.
+    """
     print(f"\n{Colors.CYAN}--- {text} ---{Colors.ENDC}")
 
 
-def print_error(text):
+def print_error(text: str) -> None:
+    """
+    Print an error message.
+    """
     print(f"{Colors.FAIL}Error: {text}{Colors.ENDC}")
 
 
-def print_success(text):
+def print_success(text: str) -> None:
+    """
+    Print a success message.
+    """
     print(f"{Colors.GREEN}{text}{Colors.ENDC}")
 
 
-def input_prompt(text):
+def input_prompt(text: str) -> str:
+    """
+    Print a prompt and return the user's input.
+    """
     return input(f"{Colors.BLUE}{text}{Colors.ENDC} ")
 
 
 # --- Main Application ---
 class Dashboard:
-    def __init__(self):
-        self.tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+    """
+    Main application class for the MLflow Monitoring Dashboard.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the dashboard.
+        """
+        self.tracking_uri: str = os.environ.get(
+            "MLFLOW_TRACKING_URI", "http://mlflow:5000"
+        )
         mlflow.set_tracking_uri(self.tracking_uri)
-        self.client = MlflowClient()
-        self.conn = None
+        self.client: MlflowClient = MlflowClient()
+        self.conn: psycopg2.connect | None = None
         self.connect_db()
 
-    def connect_db(self):
+    def connect_db(self) -> None:
+        """
+        Connect to the database.
+        """
+
         try:
             # Attempt to connect to postgres using standard env vars if available,
             # or fallback to service name 'postgres' which works in docker compose network
-            db_user = os.environ.get("POSTGRES_USER", "postgres")
-            db_password = os.environ.get(
+            db_user: str = os.environ.get("POSTGRES_USER", "postgres")
+            db_password: str = os.environ.get(
                 "POSTGRES_PASSWORD", "postgres"
             )  # Default might be different
-            db_name = os.environ.get("POSTGRES_DB", "mlflow")
-            db_host = os.environ.get("POSTGRES_HOST", "postgres")
+            db_name: str = os.environ.get("POSTGRES_DB", "mlflow")
+            db_host: str = os.environ.get("POSTGRES_HOST", "postgres")
 
             self.conn = psycopg2.connect(
                 host=db_host, database=db_name, user=db_user, password=db_password
             )
-            # print_success("Connected to Metadata Store (Postgres)")
-        except Exception as e:
+            print_success("Connected to Metadata Store (Postgres)")
+        except Exception as e:  # pylint: disable=broad-except
             print_error(f"Could not connect to database: {e}")
             self.conn = None
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Run the dashboard.
+        """
+
         while True:
             os.system("cls" if os.name == "nt" else "clear")
             print_header("MLOps Monitoring Dashboard")
@@ -95,7 +144,11 @@ class Dashboard:
                 input("Invalid option. Press Enter.")
 
     # --- Experiment Browser ---
-    def menu_experiments(self):
+    def menu_experiments(self) -> None:
+        """
+        Menu for experiments.
+        """
+
         while True:
             print_sub("Experiment Browser")
             experiments = self.client.search_experiments()
@@ -125,7 +178,7 @@ class Dashboard:
                     try:
                         self.client.delete_experiment(exp_id)
                         print_success(f"Deleted experiment {exp_id}")
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-except
                         print_error(str(e))
                     input("Press Enter...")
             else:
@@ -139,7 +192,11 @@ class Dashboard:
                 if not found:
                     input("Experiment not found. Press Enter.")
 
-    def view_runs(self, experiment_id):
+    def view_runs(self, experiment_id: str) -> None:
+        """
+        View runs in an experiment.
+        """
+
         while True:
             print_sub(f"Runs in Experiment {experiment_id}")
             runs = self.client.search_runs(
@@ -177,7 +234,7 @@ class Dashboard:
                 try:
                     self.client.delete_run(run_id)
                     print_success(f"Deleted run {run_id}")
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print_error(str(e))
                 input("Press Enter...")
             elif choice.startswith("reg "):
@@ -192,7 +249,11 @@ class Dashboard:
                 else:
                     input("Run not found. Press Enter to continue...")
 
-    def view_run_details(self, run):
+    def view_run_details(self, run: Any) -> None:
+        """
+        View details of a run.
+        """
+
         print_sub(f"Run Details: {run.info.run_id}")
         print(f"Status: {run.info.status}")
         print(f"Artifact URI: {run.info.artifact_uri}")
@@ -210,7 +271,7 @@ class Dashboard:
             artifacts = self.client.list_artifacts(run.info.run_id)
             for art in artifacts:
                 print(f"  - {art.path} ({art.file_size} bytes)")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print_error(f"Could not list artifacts: {e}")
 
         input("\nPress Enter to go back...")
@@ -240,7 +301,7 @@ class Dashboard:
                 name=model_name, source=source, run_id=run_id
             )
             print_success(f"Successfully registered version {mv.version}!")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print_error(f"Registration failed: {e}")
 
     # --- Registry Explorer ---
@@ -281,7 +342,7 @@ class Dashboard:
                     try:
                         self.client.delete_registered_model(name)
                         print_success(f"Deleted {name}")
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-except
                         print_error(f"Failed: {e}")
                     input("Press Enter...")
             else:
@@ -320,7 +381,7 @@ class Dashboard:
                     print("\nTables:")
                     for t in tables:
                         print(f"  - {t[0]}")
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print_error(str(e))
                 input("\nPress Enter...")
 
@@ -339,7 +400,7 @@ class Dashboard:
                         else:
                             self.conn.commit()
                             print_success("Query executed.")
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-except
                         self.conn.rollback()
                         print_error(str(e))
                     input("\nPress Enter...")
@@ -354,7 +415,7 @@ class Dashboard:
                     print("\nExperiments (Raw SQL):")
                     for r in rows:
                         print(r)
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print_error(str(e))
                 input("\nPress Enter...")
 

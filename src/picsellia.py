@@ -59,7 +59,7 @@ def load_data(config: dict[str, Any]) -> DatasetLoader:
             # But standard export usually just provides the requested format.
             # We will handle organization in data_preparation.py
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Warning: Failed to export YOLO annotations via SDK: {e}")
             print("Falling back to manual JSON download.")
 

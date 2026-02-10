@@ -27,7 +27,7 @@ def recover_and_register():
     # List all .pt files
     try:
         response = s3.list_objects_v2(Bucket=bucket_name)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"❌ Failed to list bucket: {e}")
         return
 
@@ -80,7 +80,7 @@ def recover_and_register():
                         except Exception as reg_error:
                             print(f"    ❌ Registration failed: {reg_error}")
 
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     print(f"  ❌ Error loading/registering: {e}")
                     import traceback
 

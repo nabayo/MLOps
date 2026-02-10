@@ -26,7 +26,7 @@ YOLOv11 • MLflow • Docker • FastAPI
 
 - **Infrastructure**: Docker Compose (7 services)
 - **Tracking**: MLflow + PostgreSQL + MinIO
-- **Modèle**: YOLOv11 (5 variantes disponibles)
+- **Modèle**: YOLOv11/26 (modèles nano / small / medium)
 - **API**: FastAPI + Dashboard Web
 
 ---
