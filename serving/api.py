@@ -9,28 +9,36 @@ Features:
 - Real-time inference with finger counting
 """
 
-import os
-import base64
-import tempfile
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
+import os
 import cv2
+import sys
+import time
+import base64
+import mlflow
+import uvicorn
+import tempfile
+import traceback
 import numpy as np
+
+from pathlib import Path
+from ultralytics import YOLO
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+from mlflow.tracking import MlflowClient
+
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import mlflow
-from mlflow.tracking import MlflowClient
-from ultralytics import YOLO
-from dotenv import load_dotenv
 
 # Load environment
 load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="YOLOv11 Finger Counting Serving API",
+    title="YOLO Finger Counting Serving API",
     description="MLOps serving API with dynamic model loading and MLflow integration",
     version="1.0.0",
 )
@@ -256,9 +264,6 @@ def get_blur_step():
     if blur_step is None:
         try:
             # Add parent directory to path if not already there
-            import sys
-            from pathlib import Path
-
             parent_dir = str(Path(__file__).parent.parent)
             if parent_dir not in sys.path:
                 sys.path.insert(0, parent_dir)
@@ -350,8 +355,6 @@ async def list_models() -> List[Dict[str, Any]]:
 
         # Normalize names for comparison
         found_names = [rm.name for rm in registered_models]
-
-        print(f"\n\n\n\nFound models: {registered_models} {found_names}\n\n\n\n")
 
         # Try both the env var name and the Capitalized version we likely created
         for name_to_check in [default_model_name, "YOLOv26", "YOLOv11-Finger-Counter"]:
@@ -524,24 +527,19 @@ async def load_run_weights(
             local_path = client.download_artifacts(
                 run_id, artifact_path, dst_path=os.path.dirname(tmp.name)
             )
-            # download_artifacts returns the directory if we passed a dir, OR the full path?
-            # It actually downloads to dst_path. If dst_path is a dir, it preserves structure?
-            # Let's trust standard behavior: download to a temp dir is safer.
 
-        # Better approach: Download to a dedicated temp dir for this load
-        # We need the file to persist for YOLO? Yes.
-        # We can store it in a 'models_cache' dir
+        #
         cache_dir = os.path.join(os.getcwd(), "models_cache", run_id)
         os.makedirs(cache_dir, exist_ok=True)
 
         local_path = client.download_artifacts(
             run_id, artifact_path, dst_path=cache_dir
         )
+
         # If artifact_path is 'weights/best.pt', it's at cache_dir/weights/best.pt
         full_path = os.path.join(cache_dir, artifact_path)
 
         if not os.path.exists(full_path):
-            # Try finding it if structure wasn't preserved exactly as expected
             # download_artifacts return value is the local path
             full_path = local_path
 
@@ -578,7 +576,6 @@ async def load_run_weights(
 
     except Exception as e:
         print(f"❌ Load failed: {e}")
-        import traceback
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to load weights: {str(e)}")
@@ -633,8 +630,7 @@ async def predict(
                 processed_image=None,
             )
 
-        # If we reached here, we process the frame
-        # Reset counter
+        # Start Frame processing, Reset counter
         FRAME_COUNTER = 0
 
         # Preprocessing
@@ -648,12 +644,9 @@ async def predict(
             except Exception as prep_error:
                 print(f"⚠ Preprocessing failed: {prep_error}")
                 # Continue without preprocessing
-                import traceback
-
                 traceback.print_exc()
 
         # Run inference
-        import time
 
         start_time = time.time()
 
@@ -661,7 +654,6 @@ async def predict(
             results = current_model.predict(image, conf=0.15, iou=0.7, verbose=False)
         except Exception as inf_error:
             print(f"❌ Inference failed: {inf_error}")
-            import traceback
 
             traceback.print_exc()
             raise HTTPException(
@@ -738,7 +730,6 @@ async def predict(
         raise
     except Exception as e:
         print(f"❌ Prediction error: {e}")
-        import traceback
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
@@ -756,7 +747,5 @@ async def get_metrics():
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     # Run server
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
