@@ -9,7 +9,7 @@ Features:
 - Real-time inference with finger counting
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 from datetime import datetime
 
 import os
@@ -76,7 +76,7 @@ class ModelInfo(BaseModel):
     version: Optional[str]
     stage: Optional[str]
     architecture: Optional[str]
-    metrics: Dict[str, float]
+    metrics: dict[str, float]
     loaded_at: str
 
 
@@ -92,14 +92,14 @@ class PredictionBox(BaseModel):
     class_name: str
     class_id: int
     confidence: float
-    bbox: List[float]  # [x1, y1, x2, y2]
+    bbox: list[float]  # [x1, y1, x2, y2]
 
 
 class PredictionResponse(BaseModel):
     """Inference prediction response."""
 
     finger_count: int
-    predictions: List[PredictionBox]
+    predictions: list[PredictionBox]
     preprocessing_applied: bool
     inference_time_ms: float
     processed_image: Optional[str] = None  # Base64 encoded processed image
@@ -121,16 +121,16 @@ class RunInfo(BaseModel):
     experiment_id: str
     start_time: str
     status: str
-    metrics: Dict[str, float]
-    params: Dict[str, str]
-    tags: Dict[str, str]
-    available_weights: List[str] = []
+    metrics: dict[str, float]
+    params: dict[str, str]
+    tags: dict[str, str]
+    available_weights: list[str] = []
 
 
 # Helper functions
 def load_model_from_registry(
     model_name: str, version: Optional[str] = None, stage: Optional[str] = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Load model from MLflow Model Registry.
 
@@ -345,7 +345,7 @@ async def get_current_model():
 
 
 @app.get("/models/list")
-async def list_models() -> List[Dict[str, Any]]:
+async def list_models() -> list[dict[str, Any]]:
     """List all registered models from MLflow."""
     try:
         registered_models = client.search_registered_models()
@@ -412,7 +412,7 @@ async def load_model(
     model_name: str = Query(..., description="Model name"),
     version: Optional[str] = Query(None, description="Model version"),
     stage: Optional[str] = Query(None, description="Model stage"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Dynamically load a model from MLflow registry."""
     model_info = load_model_from_registry(model_name, version, stage)
     return {
@@ -423,7 +423,7 @@ async def load_model(
 
 
 @app.get("/models/experiments")
-async def list_experiments() -> List[Dict[str, Any]]:
+async def list_experiments() -> list[dict[str, Any]]:
     """List all MLflow experiments with runs."""
     try:
         experiments = client.search_experiments()
@@ -483,7 +483,7 @@ async def set_skip_frames(config: SkipFrameConfig):
     return {"status": "success", "skip_frames": SKIP_FRAME_LIMIT}
 
 
-def check_run_weights(run_id: str) -> List[str]:
+def check_run_weights(run_id: str) -> list[str]:
     """
     Check for available weights for a specific run.
     Uses 'blind download' to verify existence.

@@ -37,7 +37,7 @@ class PreprocessingStep(ABC):
 class PreprocessingPipeline:
     """Pipeline for composing multiple preprocessing steps."""
 
-    def __init__(self, steps: List[PreprocessingStep] = None):
+    def __init__(self, steps: list[PreprocessingStep] = None):
         """
         Initialize preprocessing pipeline.
 
@@ -72,7 +72,7 @@ class PreprocessingPipeline:
 
         return processed
 
-    def get_step_names(self) -> List[str]:
+    def get_step_names(self) -> list[str]:
         """Get names of all steps in the pipeline."""
         return [step.get_name() for step in self.steps]
 

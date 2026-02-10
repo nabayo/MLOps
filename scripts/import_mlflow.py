@@ -9,7 +9,7 @@ This script imports MLflow data with collision handling:
 - Skips existing artifact files
 """
 
-from typing import Dict, Any, Set
+from typing import Any
 
 import os
 import sys
@@ -26,7 +26,7 @@ from mlflow.entities import RunStatus
 
 def import_mlflow_data(
     zip_path: str, skip_existing: bool = True, dry_run: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Import MLflow data from a backup zip file.
 
@@ -86,7 +86,7 @@ def import_mlflow_data(
         existing_experiments = {
             exp.name: exp for exp in client.search_experiments(view_type=3)
         }  # ALL
-        existing_runs: Set[str] = set()
+        existing_runs: set[str] = set()
         for exp in existing_experiments.values():
             runs = client.search_runs([exp.experiment_id])
             existing_runs.update(run.info.run_id for run in runs)

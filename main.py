@@ -23,7 +23,7 @@ from src.evaluation import YOLOEvaluator
 
 def load_training_config(
     config_path: str = "configs/training_config.yaml",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Load training configuration from YAML file."""
     with open(config_path, "r") as f:
         return yaml.safe_load(f)

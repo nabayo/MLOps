@@ -1,6 +1,7 @@
+import os
+
 import mlflow
 from mlflow.tracking import MlflowClient
-import os
 
 
 def promote_to_production():

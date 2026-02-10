@@ -8,7 +8,7 @@ This module handles:
 - Dynamic data.yaml generation for Ultralytics
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import json
 import random
@@ -25,7 +25,7 @@ class DataPreparation:
     """Handles data preparation for YOLO training."""
 
     def __init__(
-        self, dataset_path: str, config: Dict[str, Any], training_config: Dict[str, Any]
+        self, dataset_path: str, config: dict[str, Any], training_config: dict[str, Any]
     ):
         """
         Initialize data preparation.
@@ -52,7 +52,7 @@ class DataPreparation:
         self.images_path = self.output_path / "images"
         self.labels_path = self.output_path / "labels"
 
-    def validate_dataset(self) -> Tuple[bool, List[str]]:
+    def validate_dataset(self) -> tuple[bool, list[str]]:
         """
         Validate the dataset structure and integrity.
 
@@ -87,11 +87,11 @@ class DataPreparation:
         print(f"✓ Dataset validation passed: {self.dataset_path}")
         return True, errors
 
-    def convert_picsellia_to_yolo(self) -> Dict[str, List[str]]:
+    def convert_picsellia_to_yolo(self) -> dict[str, list[str]]:
         """
         Convert Picsellia format annotations to YOLO format.
 
-        Picsellia format: Dict[image_id, List[annotations with rectangles]]
+        Picsellia format: dict[image_id, list[annotations with rectangles]]
         YOLO format: <class_id> <x_center> <y_center> <width> <height>
         All values normalized to [0, 1]
 
@@ -223,7 +223,7 @@ class DataPreparation:
 
         # Create lookup maps for O(1) access
         # One map for stems, one for potential UUIDs handling
-        image_lookup: Dict[str, Path] = {}
+        image_lookup: dict[str, Path] = {}
 
         for img_stem, img_path in available_images.items():
             image_lookup[img_stem] = img_path
@@ -376,7 +376,7 @@ class DataPreparation:
 
         return {"images": image_files, "labels": label_files}
 
-    def create_splits(self, image_files: List[str]) -> Dict[str, List[str]]:
+    def create_splits(self, image_files: list[str]) -> dict[str, list[str]]:
         """
         Create train/val/test splits with configurable ratios.
 
@@ -410,7 +410,7 @@ class DataPreparation:
 
         return {"train": train_images, "val": val_images, "test": test_images}
 
-    def organize_split_directories(self, splits: Dict[str, List[str]]) -> None:
+    def organize_split_directories(self, splits: dict[str, list[str]]) -> None:
         """
         Organize images and labels into train/val/test directories.
 

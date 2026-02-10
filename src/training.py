@@ -11,7 +11,7 @@ Features:
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from datetime import datetime
 
 import mlflow
@@ -29,7 +29,7 @@ class YOLOTrainer:
     def __init__(
         self,
         data_yaml_path: str,
-        training_config: Dict[str, Any],
+        training_config: dict[str, Any],
         mlflow_tracking_uri: Optional[str] = None,
     ):
         """
@@ -106,7 +106,7 @@ class YOLOTrainer:
 
         return model_path
 
-    def _prepare_training_args(self) -> Dict[str, Any]:
+    def _prepare_training_args(self) -> dict[str, Any]:
         """
         Prepare training arguments for Ultralytics YOLO.
 
@@ -165,7 +165,7 @@ class YOLOTrainer:
 
         return args
 
-    def _log_all_parameters(self, training_args: Dict[str, Any]) -> None:
+    def _log_all_parameters(self, training_args: dict[str, Any]) -> None:
         """
         Log ALL parameters to MLflow for complete experiment tracking.
 
@@ -309,7 +309,7 @@ class YOLOTrainer:
     def _register_model(
         self,
         best_model_path: Path,
-        final_metrics: Dict[str, float],
+        final_metrics: dict[str, float],
         model_name_base: str,
     ) -> None:
         """
@@ -422,7 +422,7 @@ class YOLOTrainer:
         # otherwise it defaults to 'project' name (which is 'experiments')
         os.environ["MLFLOW_EXPERIMENT_NAME"] = experiment_name
 
-    def train(self) -> Dict[str, Any]:
+    def train(self) -> dict[str, Any]:
         """
         Execute complete training pipeline with MLflow tracking.
 

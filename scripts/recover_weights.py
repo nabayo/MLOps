@@ -1,7 +1,9 @@
 import os
+
+from pathlib import Path
+
 import mlflow
 from mlflow.tracking import MlflowClient
-from pathlib import Path
 
 # Setup environment matches docker-compose
 os.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5000"

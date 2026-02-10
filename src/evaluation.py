@@ -9,7 +9,7 @@ Features:
 - Confidence calibration
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import os
 from pathlib import Path
@@ -39,7 +39,7 @@ class YOLOEvaluator:
         print(f"📦 Loading model from {model_path}")
         self.model = YOLO(str(model_path))
 
-    def evaluate(self) -> Dict[str, Any]:
+    def evaluate(self) -> dict[str, Any]:
         """
         Run complete evaluation pipeline.
 

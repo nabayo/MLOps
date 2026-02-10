@@ -1,7 +1,8 @@
+import os
 import boto3
 import mlflow
-import os
 import tempfile
+
 from ultralytics import YOLO
 
 
