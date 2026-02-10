@@ -16,7 +16,6 @@ import zipfile
 import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any
 
 import mlflow
 from mlflow.tracking import MlflowClient
@@ -42,8 +41,8 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"mlflow_backup_{timestamp}.zip"
 
-    if not backup_name.endswith('.zip'):
-        backup_name += '.zip'
+    if not backup_name.endswith(".zip"):
+        backup_name += ".zip"
 
     zip_path = output_path / backup_name
     temp_dir = output_path / f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -71,16 +70,16 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
 
         for exp in experiments:
             exp_data = {
-                'experiment_id': exp.experiment_id,
-                'name': exp.name,
-                'artifact_location': exp.artifact_location,
-                'lifecycle_stage': exp.lifecycle_stage,
-                'tags': exp.tags
+                "experiment_id": exp.experiment_id,
+                "name": exp.name,
+                "artifact_location": exp.artifact_location,
+                "lifecycle_stage": exp.lifecycle_stage,
+                "tags": exp.tags,
             }
             experiments_data.append(exp_data)
             print(f"  ✓ Experiment: {exp.name} (ID: {exp.experiment_id})")
 
-        with open(experiments_dir / "experiments.json", 'w') as f:
+        with open(experiments_dir / "experiments.json", "w") as f:
             json.dump(experiments_data, f, indent=2)
 
         # Export runs
@@ -97,23 +96,23 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
 
                 # Export run metadata
                 run_data = {
-                    'info': {
-                        'run_id': run.info.run_id,
-                        'experiment_id': run.info.experiment_id,
-                        'run_name': run.info.run_name,
-                        'status': run.info.status,
-                        'start_time': run.info.start_time,
-                        'end_time': run.info.end_time,
-                        'artifact_uri': run.info.artifact_uri,
+                    "info": {
+                        "run_id": run.info.run_id,
+                        "experiment_id": run.info.experiment_id,
+                        "run_name": run.info.run_name,
+                        "status": run.info.status,
+                        "start_time": run.info.start_time,
+                        "end_time": run.info.end_time,
+                        "artifact_uri": run.info.artifact_uri,
                     },
-                    'data': {
-                        'params': run.data.params,
-                        'metrics': run.data.metrics,
-                        'tags': run.data.tags
-                    }
+                    "data": {
+                        "params": run.data.params,
+                        "metrics": run.data.metrics,
+                        "tags": run.data.tags,
+                    },
                 }
 
-                with open(run_dir / "run.json", 'w') as f:
+                with open(run_dir / "run.json", "w") as f:
                     json.dump(run_data, f, indent=2)
 
                 # Export artifacts
@@ -122,10 +121,14 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                     artifacts_dir.mkdir(exist_ok=True)
 
                     # Download all artifacts for this run
-                    local_artifact_path = client.download_artifacts(run.info.run_id, "", dst_path=str(artifacts_dir))
+                    local_artifact_path = client.download_artifacts(
+                        run.info.run_id, "", dst_path=str(artifacts_dir)
+                    )
 
                 except Exception as e:
-                    print(f"    ⚠ Warning: Could not download artifacts for run {run.info.run_id}: {e}")
+                    print(
+                        f"    ⚠ Warning: Could not download artifacts for run {run.info.run_id}: {e}"
+                    )
 
                 print(f"  ✓ Run: {run.info.run_name or run.info.run_id[:8]}")
 
@@ -141,31 +144,31 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                 model_versions = client.search_model_versions(f"name='{model.name}'")
 
                 model_data = {
-                    'name': model.name,
-                    'creation_timestamp': model.creation_timestamp,
-                    'last_updated_timestamp': model.last_updated_timestamp,
-                    'description': model.description,
-                    'tags': model.tags,
-                    'versions': []
+                    "name": model.name,
+                    "creation_timestamp": model.creation_timestamp,
+                    "last_updated_timestamp": model.last_updated_timestamp,
+                    "description": model.description,
+                    "tags": model.tags,
+                    "versions": [],
                 }
 
                 for version in model_versions:
                     version_data = {
-                        'version': version.version,
-                        'creation_timestamp': version.creation_timestamp,
-                        'last_updated_timestamp': version.last_updated_timestamp,
-                        'description': version.description,
-                        'run_id': version.run_id,
-                        'status': version.status,
-                        'current_stage': version.current_stage,
-                        'tags': version.tags
+                        "version": version.version,
+                        "creation_timestamp": version.creation_timestamp,
+                        "last_updated_timestamp": version.last_updated_timestamp,
+                        "description": version.description,
+                        "run_id": version.run_id,
+                        "status": version.status,
+                        "current_stage": version.current_stage,
+                        "tags": version.tags,
                     }
-                    model_data['versions'].append(version_data)
+                    model_data["versions"].append(version_data)
 
                 models_data.append(model_data)
                 print(f"  ✓ Model: {model.name} ({len(model_versions)} versions)")
 
-            with open(models_dir / "models.json", 'w') as f:
+            with open(models_dir / "models.json", "w") as f:
                 json.dump(models_data, f, indent=2)
 
         except Exception as e:
@@ -173,19 +176,19 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
 
         # Create metadata file
         metadata = {
-            'export_date': datetime.now().isoformat(),
-            'mlflow_tracking_uri': mlflow.get_tracking_uri(),
-            'total_experiments': len(experiments_data),
-            'total_runs': total_runs,
-            'total_models': len(models_data) if 'models_data' in locals() else 0
+            "export_date": datetime.now().isoformat(),
+            "mlflow_tracking_uri": mlflow.get_tracking_uri(),
+            "total_experiments": len(experiments_data),
+            "total_runs": total_runs,
+            "total_models": len(models_data) if "models_data" in locals() else 0,
         }
 
-        with open(temp_dir / "metadata.json", 'w') as f:
+        with open(temp_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
         # Create zip file
         print(f"\n📦 Creating backup archive: {zip_path.name}")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(temp_dir):
                 for file in files:
                     file_path = Path(root) / file
@@ -214,10 +217,16 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Export MLflow data to a backup zip file")
-    parser.add_argument("--output-dir", default="backups", help="Output directory for backup")
+    parser = argparse.ArgumentParser(
+        description="Export MLflow data to a backup zip file"
+    )
+    parser.add_argument(
+        "--output-dir", default="backups", help="Output directory for backup"
+    )
     parser.add_argument("--name", help="Custom backup name (default: auto-generated)")
-    parser.add_argument("--tracking-uri", help="MLflow tracking URI (default: from env)")
+    parser.add_argument(
+        "--tracking-uri", help="MLflow tracking URI (default: from env)"
+    )
 
     args = parser.parse_args()
 
@@ -231,5 +240,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Export failed: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

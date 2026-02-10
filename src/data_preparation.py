@@ -8,12 +8,12 @@ This module handles:
 - Dynamic data.yaml generation for Ultralytics
 """
 
-import os
+from typing import Any, Dict, List, Tuple
+
 import json
 import random
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Optional
 
 import yaml
 import numpy as np
@@ -25,10 +25,7 @@ class DataPreparation:
     """Handles data preparation for YOLO training."""
 
     def __init__(
-        self,
-        dataset_path: str,
-        config: Dict[str, Any],
-        training_config: Dict[str, Any]
+        self, dataset_path: str, config: Dict[str, Any], training_config: Dict[str, Any]
     ):
         """
         Initialize data preparation.
@@ -43,8 +40,8 @@ class DataPreparation:
         self.training_config = training_config
 
         # Extract split ratios
-        self.split_ratios = training_config['dataset']['split_ratios']
-        self.seed = training_config['dataset']['seed']
+        self.split_ratios = training_config["dataset"]["split_ratios"]
+        self.seed = training_config["dataset"]["seed"]
 
         # Set random seeds for reproducibility
         random.seed(self.seed)
@@ -77,7 +74,7 @@ class DataPreparation:
 
         # Load and validate annotations
         try:
-            with open(annotations_path, 'r') as f:
+            with open(annotations_path, "r") as f:
                 annotations = json.load(f)
 
             if not isinstance(annotations, dict):
@@ -105,7 +102,7 @@ class DataPreparation:
 
         # Load annotations
         annotations_path = self.dataset_path / "annotations.json"
-        with open(annotations_path, 'r') as f:
+        with open(annotations_path, "r") as f:
             annotations_data = json.load(f)
 
         # Create output directories
@@ -117,7 +114,7 @@ class DataPreparation:
         class_names = set()
 
         # Find all image files in the dataset directory
-        valid_extensions = {'.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'}
+        valid_extensions = {".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"}
         available_images = {}
         for file_path in self.dataset_path.iterdir():
             if file_path.suffix in valid_extensions:
@@ -130,8 +127,8 @@ class DataPreparation:
         label_to_id = {}
         for image_id, ann_list in annotations_data.items():
             for ann in ann_list:
-                for rect in ann.get('rectangles', []):
-                    label = rect.get('label')
+                for rect in ann.get("rectangles", []):
+                    label = rect.get("label")
                     if label and label not in label_to_id:
                         class_names.add(label)
 
@@ -144,73 +141,80 @@ class DataPreparation:
         # Check if YOLO labels were already exported by SDK
         # SDK usually puts them in a zip file/subdirectory
         import zipfile
-        
+
         # 1. Search for any zip file containing "YOLO" or just any zip in the dataset path (recursive)
         found_zip_files = list(self.dataset_path.rglob("*.zip"))
-        
+
         if found_zip_files:
             print(f"found zip files: {found_zip_files}")
             for zip_file in found_zip_files:
                 try:
-                    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                    with zipfile.ZipFile(zip_file, "r") as zip_ref:
                         # Extract to dataset path
                         print(f"Extracting {zip_file}...")
                         zip_ref.extractall(self.dataset_path)
                 except Exception as e:
                     print(f"Warning: Failed to extract {zip_file}: {e}")
-        
+
         # 2. Search for any .txt file in the download path (recursive now, to catch extracted files)
         sdk_exported_labels = list(self.dataset_path.rglob("*.txt"))
-        
+
         # Filter out classes.txt or non-label files if possible, but usually safe
-        sdk_exported_labels = [f for f in sdk_exported_labels if f.name != 'classes.txt']
+        sdk_exported_labels = [
+            f for f in sdk_exported_labels if f.name != "classes.txt"
+        ]
 
         # If we found many txt files, assume they are the labels
         use_sdk_labels = len(sdk_exported_labels) > len(available_images) * 0.5
-        
+
         if use_sdk_labels:
             print("✓ Found SDK-exported YOLO labels. Skipping manual conversion.")
             converted_count = 0
-            
-            for img_stem, img_path in tqdm(available_images.items(), desc="Processing SDK labels"):
+
+            for img_stem, img_path in tqdm(
+                available_images.items(), desc="Processing SDK labels"
+            ):
                 # Find matching txt file
                 # SDK name matches image name usually
                 label_path = self.dataset_path / (img_stem + ".txt")
-                
+
                 if not label_path.exists():
                     # Try looking for UUID match if filename match fails?
                     # For now assume Picsellia SDK matched them correctly
                     continue
-                    
+
                 # Copy image to YOLO directory
                 dst_img = self.images_path / img_path.name
                 dst_img.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(img_path, dst_img)
                 image_files.append(str(dst_img))
-                
+
                 # Copy label to YOLO directory
-                label_filename = img_path.stem + '.txt'
+                label_filename = img_path.stem + ".txt"
                 dst_label = self.labels_path / label_filename
                 dst_label.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(label_path, dst_label)
                 label_files.append(str(dst_label))
-                
+
                 converted_count += 1
-                
+
             print(f"✓ Processed {converted_count} images using SDK labels")
-            
+
             # Use class names from file if available, else use inferred
             classes_file = self.dataset_path / "classes.txt"
             if classes_file.exists():
-                with open(classes_file, 'r') as f:
-                    self.class_names = [line.strip() for line in f.readlines() if line.strip()]
+                with open(classes_file, "r") as f:
+                    self.class_names = [
+                        line.strip() for line in f.readlines() if line.strip()
+                    ]
             else:
-                 self.class_names = class_names_sorted if class_names_sorted else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+                self.class_names = (
+                    class_names_sorted
+                    if class_names_sorted
+                    else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+                )
 
-            return {
-                'images': image_files,
-                'labels': label_files
-            }
+            return {"images": image_files, "labels": label_files}
 
         # Process each annotated image (Manual Fallback)
         converted_count = 0
@@ -220,50 +224,52 @@ class DataPreparation:
         # Create lookup maps for O(1) access
         # One map for stems, one for potential UUIDs handling
         image_lookup: Dict[str, Path] = {}
-        
+
         for img_stem, img_path in available_images.items():
             image_lookup[img_stem] = img_path
             # If the stem is part of a UUID-like string, we might want to index parts of it?
             # But the heuristic was: "if image_id in img_path.name or img_stem == image_id"
-        
+
         # We need a more robust way to handle the "in" check efficiently
         # But if image_id IS the stem, direct lookup works.
-        # If image_id is IN the name, we can pre-process that? 
+        # If image_id is IN the name, we can pre-process that?
         # Actually, let's stick to the heuristic but optimize the common case (exact match)
         # And for the "in" check... if N is large, iterating all keys is bad.
         # However, usually image_id in Picsellia IS the filename stem or close to it.
-        
-        for image_id, ann_list in tqdm(annotations_data.items(), desc="Converting annotations"):
+
+        for image_id, ann_list in tqdm(
+            annotations_data.items(), desc="Converting annotations"
+        ):
             # Try to find the corresponding image file
             image_path = None
-            
+
             # 1. Exact stem match (O(1))
             if image_id in image_lookup:
                 image_path = image_lookup[image_id]
             else:
                 # 2. Fallback: Check if image_id is a substring of any filename (slower)
-                # Only do this if direct match failed. 
+                # Only do this if direct match failed.
                 # To optimize this: maybe map parts of filenames?
                 # For now, let's assume direct match is the 99% case if data extraction is correct.
                 # If not, we might fall back to linear search but only for missing ones.
-                 for img_stem, img_path in available_images.items():
+                for img_stem, img_path in available_images.items():
                     if image_id in img_path.name:
                         image_path = img_path
                         # Cache it for future?
                         image_lookup[image_id] = img_path
                         break
-            
+
             # If UUID matching failed, use first available image (assumes order)
             # This is a fallback - better approach would be to use Picsellia SDK properly
             if image_path is None and available_images:
                 # Use alphabetically first unused image
                 # This part was also O(N) inside the loop! "used_images" grew.
                 # Optimization: Maintain a set of used stems
-                # But "available_images" is static. 
+                # But "available_images" is static.
                 # Let's simple skip this "first available" logic if it's too expensive
                 # or optimize it.
-                pass 
-                
+                pass
+
             if image_path is None:
                 skipped_count += 1
                 continue
@@ -281,16 +287,16 @@ class DataPreparation:
             yolo_annotations = []
             for ann in ann_list:
                 # Only process ACCEPTED annotations
-                if ann.get('status') != 'ACCEPTED':
+                if ann.get("status") != "ACCEPTED":
                     continue
 
-                for rect in ann.get('rectangles', []):
+                for rect in ann.get("rectangles", []):
                     # Get bounding box (Picsellia format: x, y, w, h in pixels)
-                    x = rect.get('x', 0)
-                    y = rect.get('y', 0)
-                    w = rect.get('w', 0)
-                    h = rect.get('h', 0)
-                    label = rect.get('label')
+                    x = rect.get("x", 0)
+                    y = rect.get("y", 0)
+                    w = rect.get("w", 0)
+                    h = rect.get("h", 0)
+                    label = rect.get("label")
 
                     if w <= 0 or h <= 0 or label not in label_to_id:
                         continue
@@ -300,25 +306,28 @@ class DataPreparation:
                     y_center = (y + h / 2) / img_height
                     norm_width = w / img_width
                     norm_height = h / img_height
-                    
+
                     # Check if clamping is needed
                     is_invalid = (
-                        x_center > 1.0 or y_center > 1.0 or 
-                        norm_width > 1.0 or norm_height > 1.0 or
-                        x_center < 0 or y_center < 0
+                        x_center > 1.0
+                        or y_center > 1.0
+                        or norm_width > 1.0
+                        or norm_height > 1.0
+                        or x_center < 0
+                        or y_center < 0
                     )
-                    
+
                     if is_invalid:
                         clamped_count += 1
-                        
+
                         # Clamp width/height first
                         norm_width = min(max(norm_width, 0.0), 1.0)
                         norm_height = min(max(norm_height, 0.0), 1.0)
-                        
+
                         # Clamp center
                         x_center = min(max(x_center, 0.0), 1.0)
                         y_center = min(max(y_center, 0.0), 1.0)
-                        
+
                         # Use a small epsilon to avoid edge cases
                         x_center = min(x_center, 0.999999)
                         y_center = min(y_center, 0.999999)
@@ -333,12 +342,12 @@ class DataPreparation:
                     )
 
             # Save label file (even if empty - indicating negative example)
-            label_filename = image_path.stem + '.txt'
+            label_filename = image_path.stem + ".txt"
             label_path = self.labels_path / label_filename
             label_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(label_path, 'w') as f:
-                f.write('\n'.join(yolo_annotations))
+            with open(label_path, "w") as f:
+                f.write("\n".join(yolo_annotations))
 
             label_files.append(str(label_path))
 
@@ -354,20 +363,20 @@ class DataPreparation:
         if skipped_count > 0:
             print(f"⚠ Skipped {skipped_count} images (missing files)")
         if clamped_count > 0:
-            print(f"⚠ Clamped/Fixed {clamped_count} annotations that were out of bounds")
+            print(
+                f"⚠ Clamped/Fixed {clamped_count} annotations that were out of bounds"
+            )
 
         # Store class names
-        self.class_names = class_names_sorted if class_names_sorted else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+        self.class_names = (
+            class_names_sorted
+            if class_names_sorted
+            else ["finger-1", "finger-2", "finger-3", "finger-4", "finger-5"]
+        )
 
-        return {
-            'images': image_files,
-            'labels': label_files
-        }
+        return {"images": image_files, "labels": label_files}
 
-    def create_splits(
-        self,
-        image_files: List[str]
-    ) -> Dict[str, List[str]]:
+    def create_splits(self, image_files: List[str]) -> Dict[str, List[str]]:
         """
         Create train/val/test splits with configurable ratios.
 
@@ -377,29 +386,29 @@ class DataPreparation:
         Returns:
             Dictionary with 'train', 'val', 'test' lists of image paths
         """
-        print(f"\n📊 Creating dataset splits (train: {self.split_ratios['train']:.0%}, "
-              f"val: {self.split_ratios['val']:.0%}, test: {self.split_ratios['test']:.0%})...")
+        print(
+            f"\n📊 Creating dataset splits (train: {self.split_ratios['train']:.0%}, "
+            f"val: {self.split_ratios['val']:.0%}, test: {self.split_ratios['test']:.0%})..."
+        )
 
         # Shuffle images
         random.shuffle(image_files)
 
         # Calculate split indices
         total = len(image_files)
-        train_size = int(total * self.split_ratios['train'])
-        val_size = int(total * self.split_ratios['val'])
+        train_size = int(total * self.split_ratios["train"])
+        val_size = int(total * self.split_ratios["val"])
 
         # Split
         train_images = image_files[:train_size]
-        val_images = image_files[train_size:train_size + val_size]
-        test_images = image_files[train_size + val_size:]
+        val_images = image_files[train_size : train_size + val_size]
+        test_images = image_files[train_size + val_size :]
 
-        print(f"✓ Split created: {len(train_images)} train, {len(val_images)} val, {len(test_images)} test")
+        print(
+            f"✓ Split created: {len(train_images)} train, {len(val_images)} val, {len(test_images)} test"
+        )
 
-        return {
-            'train': train_images,
-            'val': val_images,
-            'test': test_images
-        }
+        return {"train": train_images, "val": val_images, "test": test_images}
 
     def organize_split_directories(self, splits: Dict[str, List[str]]) -> None:
         """
@@ -412,8 +421,8 @@ class DataPreparation:
 
         for split_name, image_paths in splits.items():
             # Create directories
-            split_images_dir = self.output_path / 'images' / split_name
-            split_labels_dir = self.output_path / 'labels' / split_name
+            split_images_dir = self.output_path / "images" / split_name
+            split_labels_dir = self.output_path / "labels" / split_name
             split_images_dir.mkdir(parents=True, exist_ok=True)
             split_labels_dir.mkdir(parents=True, exist_ok=True)
 
@@ -426,7 +435,7 @@ class DataPreparation:
                 shutil.copy2(img_path, dst_img)
 
                 # Copy corresponding label
-                label_name = img_path.stem + '.txt'
+                label_name = img_path.stem + ".txt"
                 src_label = self.labels_path / label_name
                 dst_label = split_labels_dir / label_name
 
@@ -446,17 +455,17 @@ class DataPreparation:
 
         # Prepare data configuration
         data_config = {
-            'path': str(self.output_path.absolute()),
-            'train': 'images/train',
-            'val': 'images/val',
-            'test': 'images/test',
-            'nc': len(self.class_names),
-            'names': list(self.class_names)
+            "path": str(self.output_path.absolute()),
+            "train": "images/train",
+            "val": "images/val",
+            "test": "images/test",
+            "nc": len(self.class_names),
+            "names": list(self.class_names),
         }
 
         # Save data.yaml
-        data_yaml_path = self.output_path / 'data.yaml'
-        with open(data_yaml_path, 'w') as f:
+        data_yaml_path = self.output_path / "data.yaml"
+        with open(data_yaml_path, "w") as f:
             yaml.dump(data_config, f, default_flow_style=False, sort_keys=False)
 
         print(f"✓ data.yaml generated: {data_yaml_path}")
@@ -485,7 +494,7 @@ class DataPreparation:
         converted_files = self.convert_picsellia_to_yolo()
 
         # Step 3: Create splits
-        splits = self.create_splits(converted_files['images'])
+        splits = self.create_splits(converted_files["images"])
 
         # Step 4: Organize directories
         self.organize_split_directories(splits)

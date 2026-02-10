@@ -1,19 +1,19 @@
+import os
 
 import mlflow
 from mlflow.tracking import MlflowClient
-import os
-import json
+
 
 def check_registry():
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
-    
+
     output_path = "/app/experiments/registry_dump.txt"
     with open(output_path, "w") as f:
         f.write(f"Registry Check at {tracking_uri}\n")
         f.write("=" * 50 + "\n")
-        
+
         try:
             models = client.search_registered_models()
             f.write(f"Found {len(models)} registered models:\n")
@@ -29,10 +29,10 @@ def check_registry():
                         f.write(f"    Run ID: {v.run_id}\n")
                 else:
                     f.write("  (No versions found)\n")
-                    
+
             if len(models) == 0:
                 f.write("\nRegistry is empty (via search).\n")
-                
+
             # DEBUG: Check artifacts for the first available run to see why registration might be failing
             # DEBUG: Check artifacts for all runs
             try:
@@ -42,7 +42,7 @@ def check_registry():
                     f.write(f"\nExperiment: {exp.name} (ID: {exp.experiment_id})\n")
                     runs = client.search_runs(exp.experiment_id)
                     if runs:
-                        for run in runs[:5]: # Inspect top 5 runs
+                        for run in runs[:5]:  # Inspect top 5 runs
                             f.write(f"  Run: {run.info.run_id} ({run.info.run_name})\n")
                             f.write(f"    Artifact URI: {run.info.artifact_uri}\n")
                             try:
@@ -52,7 +52,9 @@ def check_registry():
                                     for art in artifacts:
                                         f.write(f"      - {art.path}\n")
                                         if art.path == "weights" and art.is_dir:
-                                            sub = client.list_artifacts(run.info.run_id, "weights")
+                                            sub = client.list_artifacts(
+                                                run.info.run_id, "weights"
+                                            )
                                             for s in sub:
                                                 f.write(f"        - {s.path}\n")
                                 else:
@@ -66,8 +68,9 @@ def check_registry():
 
         except Exception as e:
             f.write(f"\nError searching models: {e}\n")
-            
+
     print(f"Registry dump written to {output_path}")
+
 
 if __name__ == "__main__":
     check_registry()

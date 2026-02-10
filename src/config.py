@@ -1,5 +1,6 @@
 import yaml
 
+
 def load_config() -> dict:
 
     # load config from yaml file

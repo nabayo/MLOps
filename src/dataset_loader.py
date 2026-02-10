@@ -1,7 +1,6 @@
 from typing import Any, Optional
 
 import os
-import json
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,12 +12,11 @@ def get_dataset_download_path(config: dict[str, Any]) -> str:
     dataset_name: str = config["dataset_name"].replace(" ", "_")
     dataset_version: str = config["dataset_version"].replace(" ", "_")
 
-    relative_path: str = os.path.join(dataset_download_path, dataset_name, dataset_version)
+    relative_path: str = os.path.join(
+        dataset_download_path, dataset_name, dataset_version
+    )
 
     absolute_path: str = os.path.abspath(relative_path)
-
-    print(f"[DEBUG] Dataset relative path: {relative_path}")
-    print(f"[DEBUG] Dataset absolute path: {absolute_path}")
 
     return absolute_path
 
@@ -29,18 +27,16 @@ def get_annotations_path(config: dict[str, Any]) -> str:
     dataset_name: str = config["dataset_name"].replace(" ", "_")
     dataset_version: str = config["dataset_version"].replace(" ", "_")
 
-    relative_path: str = os.path.join(dataset_download_path, dataset_name, dataset_version, "annotations.json")
+    relative_path: str = os.path.join(
+        dataset_download_path, dataset_name, dataset_version, "annotations.json"
+    )
 
     absolute_path: str = os.path.abspath(relative_path)
-
-    print(f"[DEBUG] Dataset relative path: {relative_path}")
-    print(f"[DEBUG] Dataset absolute path: {absolute_path}")
 
     return absolute_path
 
 
 class DatasetLoader:
-
     def __init__(self, config: dict[str, Any]):
 
         # Config
@@ -57,10 +53,7 @@ class DatasetLoader:
         self.x_test: Optional[NDArray[np.uint8]] = None
         self.y_test: Optional[NDArray[np.uint8]] = None
 
-
     def load_data(self) -> None:
 
         # Load the dataset
         pass
-
-

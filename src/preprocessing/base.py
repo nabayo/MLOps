@@ -4,8 +4,10 @@ Base classes for modular preprocessing pipeline.
 Allows composing multiple preprocessing steps in a pipeline.
 """
 
+from typing import List
+
 from abc import ABC, abstractmethod
-from typing import Any, List
+
 import numpy as np
 from numpy.typing import NDArray
 

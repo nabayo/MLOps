@@ -9,28 +9,20 @@ Features:
 - Confidence calibration
 """
 
+from typing import Any, Dict
+
 import os
 from pathlib import Path
-from typing import Any, Dict, List
 
 import mlflow
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from ultralytics import YOLO
-import torch
 
 
 class YOLOEvaluator:
     """YOLO model evaluation with comprehensive MLflow tracking."""
 
-    def __init__(
-        self,
-        model_path: str,
-        data_yaml_path: str,
-        mlflow_run_id: str = None
-    ):
+    def __init__(self, model_path: str, data_yaml_path: str, mlflow_run_id: str = None):
         """
         Initialize YOLO evaluator.
 
@@ -61,7 +53,7 @@ class YOLOEvaluator:
         # Check if we're already in a run context
         existing_run = mlflow.active_run()
         should_end_run = False
-        
+
         if existing_run and self.mlflow_run_id:
             # If there's an active run and it matches our target, use it
             if existing_run.info.run_id == self.mlflow_run_id:
@@ -71,15 +63,15 @@ class YOLOEvaluator:
                 # Different run is active, end it and start ours
                 print(f"⚠ Ending unrelated run {existing_run.info.run_id}")
                 mlflow.end_run()
-                
+
                 # Get the experiment ID from the target run to avoid mismatch
                 client = mlflow.tracking.MlflowClient()
                 target_run_info = client.get_run(self.mlflow_run_id)
                 target_experiment_id = target_run_info.info.experiment_id
-                
+
                 # Set the experiment before starting the run
                 mlflow.set_experiment(experiment_id=target_experiment_id)
-                
+
                 run = mlflow.start_run(run_id=self.mlflow_run_id)
                 should_end_run = True
         elif existing_run and not self.mlflow_run_id:
@@ -92,10 +84,10 @@ class YOLOEvaluator:
             client = mlflow.tracking.MlflowClient()
             target_run_info = client.get_run(self.mlflow_run_id)
             target_experiment_id = target_run_info.info.experiment_id
-            
+
             # Set the experiment before starting the run
             mlflow.set_experiment(experiment_id=target_experiment_id)
-            
+
             run = mlflow.start_run(run_id=self.mlflow_run_id)
             should_end_run = True
         else:
@@ -108,21 +100,23 @@ class YOLOEvaluator:
             print("\n📊 Running evaluation on test set...")
             results = self.model.val(
                 data=self.data_yaml_path,
-                split='test',
+                split="test",
                 save_json=True,
                 save_hybrid=True,
                 conf=0.001,  # Low confidence for complete analysis
                 iou=0.6,
-                plots=True
+                plots=True,
             )
 
             # Extract metrics
             metrics = {
-                'test/mAP50': results.box.map50,
-                'test/mAP50-95': results.box.map,
-                'test/precision': results.box.mp,
-                'test/recall': results.box.mr,
-                'test/f1': 2 * (results.box.mp * results.box.mr) / (results.box.mp + results.box.mr + 1e-6)
+                "test/mAP50": results.box.map50,
+                "test/mAP50-95": results.box.map,
+                "test/precision": results.box.mp,
+                "test/recall": results.box.mr,
+                "test/f1": 2
+                * (results.box.mp * results.box.mr)
+                / (results.box.mp + results.box.mr + 1e-6),
             }
 
             # Log metrics
@@ -132,7 +126,7 @@ class YOLOEvaluator:
                 print(f"  - {key}: {value:.4f}")
 
             # Per-class metrics
-            if hasattr(results.box, 'ap_class_index'):
+            if hasattr(results.box, "ap_class_index"):
                 print("\n📊 Logging per-class metrics...")
                 class_names = results.names
 
@@ -140,7 +134,7 @@ class YOLOEvaluator:
                     class_name = class_names[int(class_id)]
 
                     # Log per-class AP
-                    if hasattr(results.box, 'ap'):
+                    if hasattr(results.box, "ap"):
                         if results.box.ap.ndim > 1:
                             ap50 = results.box.ap[idx, 0]  # AP@0.5
                             ap50_95 = results.box.ap[idx].mean()  # AP@0.5:0.95
@@ -150,7 +144,9 @@ class YOLOEvaluator:
                             ap50_95 = results.box.ap.mean()  # AP@0.5:0.95
 
                         mlflow.log_metric(f"test/ap50_class_{class_name}", float(ap50))
-                        mlflow.log_metric(f"test/ap50-95_class_{class_name}", float(ap50_95))
+                        mlflow.log_metric(
+                            f"test/ap50-95_class_{class_name}", float(ap50_95)
+                        )
 
             # Log visualizations
             self._log_visualizations(results)
@@ -162,10 +158,7 @@ class YOLOEvaluator:
             print("✅ Evaluation Complete!")
             print("=" * 70)
 
-            return {
-                'metrics': metrics,
-                'run_id': run.info.run_id
-            }
+            return {"metrics": metrics, "run_id": run.info.run_id}
         finally:
             # Only end the run if we started it
             if should_end_run:
@@ -184,29 +177,29 @@ class YOLOEvaluator:
         save_dir = Path(results.save_dir)
 
         # Log confusion matrix
-        confusion_matrix = save_dir / 'confusion_matrix_normalized.png'
+        confusion_matrix = save_dir / "confusion_matrix_normalized.png"
         if confusion_matrix.exists():
-            mlflow.log_artifact(str(confusion_matrix), 'test_visualizations')
+            mlflow.log_artifact(str(confusion_matrix), "test_visualizations")
 
         # Log PR curve
-        pr_curve = save_dir / 'PR_curve.png'
+        pr_curve = save_dir / "PR_curve.png"
         if pr_curve.exists():
-            mlflow.log_artifact(str(pr_curve), 'test_visualizations')
+            mlflow.log_artifact(str(pr_curve), "test_visualizations")
 
         # Log F1 curve
-        f1_curve = save_dir / 'F1_curve.png'
+        f1_curve = save_dir / "F1_curve.png"
         if f1_curve.exists():
-            mlflow.log_artifact(str(f1_curve), 'test_visualizations')
+            mlflow.log_artifact(str(f1_curve), "test_visualizations")
 
         # Log P curve
-        p_curve = save_dir / 'P_curve.png'
+        p_curve = save_dir / "P_curve.png"
         if p_curve.exists():
-            mlflow.log_artifact(str(p_curve), 'test_visualizations')
+            mlflow.log_artifact(str(p_curve), "test_visualizations")
 
         # Log R curve
-        r_curve = save_dir / 'R_curve.png'
+        r_curve = save_dir / "R_curve.png"
         if r_curve.exists():
-            mlflow.log_artifact(str(r_curve), 'test_visualizations')
+            mlflow.log_artifact(str(r_curve), "test_visualizations")
 
         print("✓ Visualizations logged")
 
@@ -229,9 +222,7 @@ class YOLOEvaluator:
         try:
             # Run prediction to get confidence scores
             results = self.model.predict(
-                source=self.data_yaml_path,
-                save=False,
-                conf=0.001
+                source=self.data_yaml_path, save=False, conf=0.001
             )
 
             # Collect confidences
@@ -243,18 +234,18 @@ class YOLOEvaluator:
             if len(confidences) > 0:
                 # Create plot
                 plt.figure(figsize=(10, 6))
-                plt.hist(confidences, bins=50, edgecolor='black', alpha=0.7)
-                plt.xlabel('Confidence Score')
-                plt.ylabel('Frequency')
-                plt.title('Prediction Confidence Distribution')
+                plt.hist(confidences, bins=50, edgecolor="black", alpha=0.7)
+                plt.xlabel("Confidence Score")
+                plt.ylabel("Frequency")
+                plt.title("Prediction Confidence Distribution")
                 plt.grid(True, alpha=0.3)
 
                 # Save and log
-                conf_dist_path = 'confidence_distribution.png'
-                plt.savefig(conf_dist_path, dpi=150, bbox_inches='tight')
+                conf_dist_path = "confidence_distribution.png"
+                plt.savefig(conf_dist_path, dpi=150, bbox_inches="tight")
                 plt.close()
 
-                mlflow.log_artifact(conf_dist_path, 'test_visualizations')
+                mlflow.log_artifact(conf_dist_path, "test_visualizations")
                 os.remove(conf_dist_path)
 
         except Exception as e:

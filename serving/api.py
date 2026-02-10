@@ -10,17 +10,13 @@ Features:
 """
 
 import os
-import io
-import json
 import base64
 import tempfile
-import shutil
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 import cv2
 import numpy as np
-from PIL import Image
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -36,7 +32,7 @@ load_dotenv()
 app = FastAPI(
     title="YOLOv11 Finger Counting Serving API",
     description="MLOps serving API with dynamic model loading and MLflow integration",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Enable CORS
@@ -49,14 +45,14 @@ app.add_middleware(
 )
 
 # MLflow configuration
-MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 client = MlflowClient()
 
 # Global model state
 current_model = None
 current_model_info = {}
-preprocessing_enabled = os.getenv('ENABLE_PREPROCESSING', 'false').lower() == 'true'
+preprocessing_enabled = os.getenv("ENABLE_PREPROCESSING", "false").lower() == "true"
 
 # Skip frame global state
 SKIP_FRAME_LIMIT = 6  # Default skip frames
@@ -67,6 +63,7 @@ LAST_PREDICTION = None
 # Pydantic models
 class ModelInfo(BaseModel):
     """Model information response."""
+
     name: str
     version: Optional[str]
     stage: Optional[str]
@@ -77,11 +74,13 @@ class ModelInfo(BaseModel):
 
 class SkipFrameConfig(BaseModel):
     """Configuration for frame skipping."""
+
     skip_frames: int
 
 
 class PredictionBox(BaseModel):
     """Single prediction bounding box."""
+
     class_name: str
     class_id: int
     confidence: float
@@ -90,6 +89,7 @@ class PredictionBox(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Inference prediction response."""
+
     finger_count: int
     predictions: List[PredictionBox]
     preprocessing_applied: bool
@@ -99,6 +99,7 @@ class PredictionResponse(BaseModel):
 
 class ExperimentInfo(BaseModel):
     """Experiment information."""
+
     experiment_id: str
     experiment_name: str
     run_count: int
@@ -106,6 +107,7 @@ class ExperimentInfo(BaseModel):
 
 class RunInfo(BaseModel):
     """Run information."""
+
     run_id: str
     run_name: str
     experiment_id: str
@@ -119,9 +121,7 @@ class RunInfo(BaseModel):
 
 # Helper functions
 def load_model_from_registry(
-    model_name: str,
-    version: Optional[str] = None,
-    stage: Optional[str] = None
+    model_name: str, version: Optional[str] = None, stage: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Load model from MLflow Model Registry.
@@ -153,7 +153,9 @@ def load_model_from_registry(
             model_version = client.get_model_version(model_name, version)
         else:
             # Get latest version in stage
-            versions = client.get_latest_versions(model_name, stages=[stage] if stage else ["Production"])
+            versions = client.get_latest_versions(
+                model_name, stages=[stage] if stage else ["Production"]
+            )
             if not versions:
                 raise ValueError(f"No model found for {model_name} in stage {stage}")
             model_version = versions[0]
@@ -167,7 +169,7 @@ def load_model_from_registry(
         # Source format: "runs:/<run_id>/<artifact_path>"
         source = model_version.source
         print(f"Model source: {source}")
-        
+
         if source.startswith("runs:/"):
             # Extract artifact path from source
             parts = source.replace("runs:/", "").split("/", 1)
@@ -185,33 +187,29 @@ def load_model_from_registry(
         # Download artifact directly (don't list, just download)
         try:
             local_path = mlflow.artifacts.download_artifacts(
-                run_id=run_id,
-                artifact_path=artifact_path
+                run_id=run_id, artifact_path=artifact_path
             )
             print(f"✓ Downloaded to: {local_path}")
-        except Exception as download_error:
+        except Exception as _download_error:
             # If the exact path fails, try common alternatives
-            print(f"First attempt failed, trying alternatives...")
-            alternatives = [
-                "weights/best.pt",
-                "model/weights/best.pt", 
-                "best.pt"
-            ]
-            
+            print("First attempt failed, trying alternatives...")
+            alternatives = ["weights/best.pt", "model/weights/best.pt", "best.pt"]
+
             local_path = None
             for alt_path in alternatives:
                 try:
                     local_path = mlflow.artifacts.download_artifacts(
-                        run_id=run_id,
-                        artifact_path=alt_path
+                        run_id=run_id, artifact_path=alt_path
                     )
                     print(f"✓ Found at: {alt_path}")
                     break
-                except:
+                except Exception as _e:
                     continue
-            
+
             if not local_path:
-                raise ValueError(f"Could not find model weights. Tried: {artifact_path}, {alternatives}")
+                raise ValueError(
+                    f"Could not find model weights. Tried: {artifact_path}, {alternatives}"
+                )
 
         # Load YOLO model
         model = YOLO(local_path)
@@ -219,27 +217,29 @@ def load_model_from_registry(
         # Get metrics
         metrics = {}
         for key, value in run.data.metrics.items():
-            if 'final_' in key:
-                metrics[key.replace('final_', '')] = value
+            if "final_" in key:
+                metrics[key.replace("final_", "")] = value
 
         # Get parameters
         params = run.data.params
 
         # Store model info
         model_info = {
-            'name': model_name,
-            'version': model_version.version,
-            'stage': model_version.current_stage,
-            'architecture': params.get('model_architecture', 'unknown'),
-            'metrics': metrics,
-            'run_id': run_id,
-            'loaded_at': datetime.now().isoformat()
+            "name": model_name,
+            "version": model_version.version,
+            "stage": model_version.current_stage,
+            "architecture": params.get("model_architecture", "unknown"),
+            "metrics": metrics,
+            "run_id": run_id,
+            "loaded_at": datetime.now().isoformat(),
         }
 
         current_model = model
         current_model_info = model_info
 
-        print(f"✓ Model loaded: {model_name} v{model_version.version} ({model_version.current_stage})")
+        print(
+            f"✓ Model loaded: {model_name} v{model_version.version} ({model_version.current_stage})"
+        )
         return model_info
 
     except Exception as e:
@@ -249,6 +249,7 @@ def load_model_from_registry(
 # Global preprocessing steps
 blur_step = None
 
+
 def get_blur_step():
     """Lazy initialization of blur step."""
     global blur_step
@@ -257,17 +258,20 @@ def get_blur_step():
             # Add parent directory to path if not already there
             import sys
             from pathlib import Path
+
             parent_dir = str(Path(__file__).parent.parent)
             if parent_dir not in sys.path:
                 sys.path.insert(0, parent_dir)
-            
+
             from src.preprocessing import FastFaceBlurStep
+
             print("Initializing FastFaceBlurStep...")
             blur_step = FastFaceBlurStep(blur_kernel_size=51)
         except ImportError as e:
             print(f"Warning: Could not import preprocessing module: {e}")
             return None
     return blur_step
+
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     """
@@ -284,7 +288,7 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
     # Use global/cached step instance
     step = get_blur_step()
-    
+
     if step:
         return step.process(image)
     else:
@@ -294,17 +298,18 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
 # API Endpoints
 
+
 @app.on_event("startup")
 async def startup_event():
     """Load default model and preprocessing on startup."""
-    
+
     # Initialize preprocessing if enabled
     if preprocessing_enabled:
         print("Pre-initializing face blur model...")
         get_blur_step()
 
-    model_name = os.getenv('MODEL_NAME', 'yolov11-finger-counting')
-    model_stage = os.getenv('MODEL_STAGE', 'Production')
+    model_name = os.getenv("MODEL_NAME", "yolov11-finger-counting")
+    model_stage = os.getenv("MODEL_STAGE", "Production")
 
     try:
         load_model_from_registry(model_name, stage=model_stage)
@@ -321,7 +326,7 @@ async def health_check():
         "status": "healthy",
         "mlflow_uri": MLFLOW_TRACKING_URI,
         "model_loaded": current_model is not None,
-        "preprocessing_enabled": preprocessing_enabled
+        "preprocessing_enabled": preprocessing_enabled,
     }
 
 
@@ -338,12 +343,11 @@ async def get_current_model():
 async def list_models() -> List[Dict[str, Any]]:
     """List all registered models from MLflow."""
     try:
-
         registered_models = client.search_registered_models()
-        
+
         # Fallback: Check if default model exists (search sometimes fails)
-        default_model_name = os.getenv('MODEL_NAME', "")
-        
+        default_model_name = os.getenv("MODEL_NAME", "")
+
         # Normalize names for comparison
         found_names = [rm.name for rm in registered_models]
 
@@ -356,9 +360,8 @@ async def list_models() -> List[Dict[str, Any]]:
                     m = client.get_registered_model(name_to_check)
                     print(f"Fallback: Found {name_to_check} via direct lookup")
                     registered_models.append(m)
-                except:
+                except Exception as _e:
                     pass
-
 
         models_info = []
         for rm in registered_models:
@@ -369,21 +372,31 @@ async def list_models() -> List[Dict[str, Any]]:
             for mv in latest_versions:
                 # Get run metrics
                 run = client.get_run(mv.run_id)
-                metrics = {k.replace('final_', ''): v for k, v in run.data.metrics.items() if 'final_' in k}
+                metrics = {
+                    k.replace("final_", ""): v
+                    for k, v in run.data.metrics.items()
+                    if "final_" in k
+                }
 
-                versions.append({
-                    'version': mv.version,
-                    'stage': mv.current_stage,
-                    'run_id': mv.run_id,
-                    'metrics': metrics,
-                    'created_at': datetime.fromtimestamp(mv.creation_timestamp / 1000).isoformat()
-                })
+                versions.append(
+                    {
+                        "version": mv.version,
+                        "stage": mv.current_stage,
+                        "run_id": mv.run_id,
+                        "metrics": metrics,
+                        "created_at": datetime.fromtimestamp(
+                            mv.creation_timestamp / 1000
+                        ).isoformat(),
+                    }
+                )
 
-            models_info.append({
-                'name': rm.name,
-                'description': rm.description or '',
-                'versions': versions
-            })
+            models_info.append(
+                {
+                    "name": rm.name,
+                    "description": rm.description or "",
+                    "versions": versions,
+                }
+            )
 
         return models_info
 
@@ -395,14 +408,14 @@ async def list_models() -> List[Dict[str, Any]]:
 async def load_model(
     model_name: str = Query(..., description="Model name"),
     version: Optional[str] = Query(None, description="Model version"),
-    stage: Optional[str] = Query(None, description="Model stage")
+    stage: Optional[str] = Query(None, description="Model stage"),
 ) -> Dict[str, Any]:
     """Dynamically load a model from MLflow registry."""
     model_info = load_model_from_registry(model_name, version, stage)
     return {
         "status": "success",
         "message": f"Model {model_name} loaded successfully",
-        "model_info": model_info
+        "model_info": model_info,
     }
 
 
@@ -422,32 +435,39 @@ async def list_experiments() -> List[Dict[str, Any]]:
                 # Extract metrics
                 metrics = {}
                 for key, value in run.data.metrics.items():
-                    if 'final_' in key:
-                        metrics[key.replace('final_', '')] = value
+                    if "final_" in key:
+                        metrics[key.replace("final_", "")] = value
 
-                runs_info.append({
-                    'run_id': run.info.run_id,
-                    'run_name': run.data.tags.get('mlflow.runName', 'Unnamed'),
-                    'start_time': datetime.fromtimestamp(run.info.start_time / 1000).isoformat(),
-                    'status': run.info.status,
-                    'metrics': metrics,
-                    'params': dict(run.data.params),
-                    'params': dict(run.data.params),
-                    'tags': dict(run.data.tags),
-                    'available_weights': check_run_weights(run.info.run_id)
-                })
+                runs_info.append(
+                    {
+                        "run_id": run.info.run_id,
+                        "run_name": run.data.tags.get("mlflow.runName", "Unnamed"),
+                        "start_time": datetime.fromtimestamp(
+                            run.info.start_time / 1000
+                        ).isoformat(),
+                        "status": run.info.status,
+                        "metrics": metrics,
+                        "params": dict(run.data.params),
+                        "tags": dict(run.data.tags),
+                        "available_weights": check_run_weights(run.info.run_id),
+                    }
+                )
 
-            experiments_info.append({
-                'experiment_id': exp.experiment_id,
-                'experiment_name': exp.name,
-                'run_count': len(runs),
-                'runs': runs_info
-            })
+            experiments_info.append(
+                {
+                    "experiment_id": exp.experiment_id,
+                    "experiment_name": exp.name,
+                    "run_count": len(runs),
+                    "runs": runs_info,
+                }
+            )
 
         return experiments_info
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list experiments: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list experiments: {str(e)}"
+        )
 
 
 @app.post("/config/skip_frames")
@@ -467,7 +487,7 @@ def check_run_weights(run_id: str) -> List[str]:
     """
     verified_weights = []
     potential_weights = ["weights/best.pt", "weights/last.pt", "best.pt", "last.pt"]
-    
+
     # We use a single temp directory for all checks to keep it clean
     with tempfile.TemporaryDirectory() as temp_dir:
         for weight_path in potential_weights:
@@ -478,81 +498,88 @@ def check_run_weights(run_id: str) -> List[str]:
             except Exception:
                 # Failed means likely doesn't exist
                 pass
-                
+
     return verified_weights
 
 
 @app.post("/models/load_run_weights")
 async def load_run_weights(
     run_id: str = Query(..., description="MLflow Run ID"),
-    artifact_path: str = Query(..., description="Path to weight file (e.g., weights/best.pt)")
+    artifact_path: str = Query(
+        ..., description="Path to weight file (e.g., weights/best.pt)"
+    ),
 ):
     """
     Load a model from a specific run's weight file.
     """
     global current_model, current_model_info
-    
+
     print(f"Loading model from run: {run_id}, path: {artifact_path}")
-    
+
     try:
         run = client.get_run(run_id)
-        
+
         # Download the specific artifact
         with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
-            local_path = client.download_artifacts(run_id, artifact_path, dst_path=os.path.dirname(tmp.name))
+            local_path = client.download_artifacts(
+                run_id, artifact_path, dst_path=os.path.dirname(tmp.name)
+            )
             # download_artifacts returns the directory if we passed a dir, OR the full path?
             # It actually downloads to dst_path. If dst_path is a dir, it preserves structure?
             # Let's trust standard behavior: download to a temp dir is safer.
-            
+
         # Better approach: Download to a dedicated temp dir for this load
         # We need the file to persist for YOLO? Yes.
         # We can store it in a 'models_cache' dir
         cache_dir = os.path.join(os.getcwd(), "models_cache", run_id)
         os.makedirs(cache_dir, exist_ok=True)
-        
-        local_path = client.download_artifacts(run_id, artifact_path, dst_path=cache_dir)
+
+        local_path = client.download_artifacts(
+            run_id, artifact_path, dst_path=cache_dir
+        )
         # If artifact_path is 'weights/best.pt', it's at cache_dir/weights/best.pt
         full_path = os.path.join(cache_dir, artifact_path)
-        
+
         if not os.path.exists(full_path):
-             # Try finding it if structure wasn't preserved exactly as expected
-             # download_artifacts return value is the local path
-             full_path = local_path
-        
+            # Try finding it if structure wasn't preserved exactly as expected
+            # download_artifacts return value is the local path
+            full_path = local_path
+
         print(f"✓ Downloaded to: {full_path}")
-        
+
         # Load YOLO model
         model = YOLO(full_path)
-        
+
         # Extract metrics
         metrics = {}
         for key, value in run.data.metrics.items():
-            if 'final_' in key:
-                metrics[key.replace('final_', '')] = value
-                
+            if "final_" in key:
+                metrics[key.replace("final_", "")] = value
+
         # Update state
         model_info = {
-            'name': f"Run {run_id[:8]}",
-            'version': artifact_path,
-            'stage': 'Experiment',
-            'architecture': run.data.params.get('model_architecture', 'unknown'),
-            'metrics': metrics,
-            'run_id': run_id,
-            'loaded_at': datetime.now().isoformat()
+            "name": f"Run {run_id[:8]}",
+            "version": artifact_path,
+            "stage": "Experiment",
+            "architecture": run.data.params.get("model_architecture", "unknown"),
+            "metrics": metrics,
+            "run_id": run_id,
+            "loaded_at": datetime.now().isoformat(),
         }
-        
+
         current_model = model
         current_model_info = model_info
-        
+
         return {
-            "status": "success", 
+            "status": "success",
             "message": f"Loaded {artifact_path} from run {run_id}",
-            "model_info": model_info
+            "model_info": model_info,
         }
 
     except Exception as e:
         print(f"❌ Load failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to load weights: {str(e)}")
 
@@ -560,7 +587,7 @@ async def load_run_weights(
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(
     file: UploadFile = File(...),
-    skip_check: bool = Query(True, description="Whether to apply frame skipping logic")
+    skip_check: bool = Query(True, description="Whether to apply frame skipping logic"),
 ):
     """
     Run inference on uploaded image.
@@ -581,31 +608,31 @@ async def predict(
 
         # Skip frame logic
         global FRAME_COUNTER, LAST_PREDICTION
-        
+
         # Increment counter
         FRAME_COUNTER += 1
-        
+
         # Check if we should skip
         if skip_check and FRAME_COUNTER < SKIP_FRAME_LIMIT:
             # Skip inference
             # print(f"⏭ Skipping frame {FRAME_COUNTER}/{SKIP_FRAME_LIMIT}")
-            
+
             # Return last prediction if available to keep UI stable
             if LAST_PREDICTION:
                 # Update inference time to 0 to indicate skip
                 last_response = LAST_PREDICTION.copy()
                 last_response.inference_time_ms = 0
                 return last_response
-            
+
             # If no last prediction, return empty
             return PredictionResponse(
                 finger_count=0,
                 predictions=[],
                 preprocessing_applied=False,
                 inference_time_ms=0,
-                processed_image=None
+                processed_image=None,
             )
-            
+
         # If we reached here, we process the frame
         # Reset counter
         FRAME_COUNTER = 0
@@ -613,35 +640,33 @@ async def predict(
         # Preprocessing
         preprocessing_applied = False
         if preprocessing_enabled:
-            print(f"🔄 Preprocessing enabled, applying face blur...")
+            print("🔄 Preprocessing enabled, applying face blur...")
             try:
                 image = preprocess_image(image)
                 preprocessing_applied = True
-                print(f"✓ Preprocessing applied successfully")
+                print("✓ Preprocessing applied successfully")
             except Exception as prep_error:
                 print(f"⚠ Preprocessing failed: {prep_error}")
                 # Continue without preprocessing
                 import traceback
+
                 traceback.print_exc()
 
         # Run inference
         import time
+
         start_time = time.time()
 
         try:
-            results = current_model.predict(
-                image,
-                conf=0.15,
-                iou=0.7,
-                verbose=False
-            )
+            results = current_model.predict(image, conf=0.15, iou=0.7, verbose=False)
         except Exception as inf_error:
             print(f"❌ Inference failed: {inf_error}")
             import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Inference failed: {str(inf_error)}")
 
-        print(f"\n\n\n\n\033[92mDEBUG RESULTS: {results}\033[0m\n\n\n\n")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500, detail=f"Inference failed: {str(inf_error)}"
+            )
 
         inference_time = (time.time() - start_time) * 1000
 
@@ -655,8 +680,6 @@ async def predict(
             if result.boxes is not None:
                 boxes = result.boxes
 
-                print(f"\n\n\n\n\033[93mDEBUG BOXES: {boxes}\033[0m\n\n\n\n")
-
                 for i in range(len(boxes)):
                     box = boxes[i]
 
@@ -668,45 +691,47 @@ async def predict(
                     # Get bbox coordinates
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-                    predictions.append(PredictionBox(
-                        class_name=class_name,
-                        class_id=class_id,
-                        confidence=confidence,
-                        bbox=[x1, y1, x2, y2]
-                    ))
+                    predictions.append(
+                        PredictionBox(
+                            class_name=class_name,
+                            class_id=class_id,
+                            confidence=confidence,
+                            bbox=[x1, y1, x2, y2],
+                        )
+                    )
 
                     # Count fingers
                     # Assuming class names like "1", "2", "3", "4", "5" or "finger-1", etc.
                     try:
                         if class_name.isdigit():
                             finger_count += int(class_name)
-                        elif '-' in class_name:
-                            finger_count += int(class_name.split('-')[-1])
-                    except:
+                        elif "-" in class_name:
+                            finger_count += int(class_name.split("-")[-1])
+                    except Exception as _e:
                         finger_count += 1  # Fallback
 
-        print(f"\n\n\n\n\033[92mDEBUG PREDICTIONS: {predictions}\033[0m\n\n\n\n")
-
-        print(f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms")
+        print(
+            f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms"
+        )
 
         # Encode processed image as base64 for frontend display
         processed_image_b64 = None
         if preprocessing_applied:
             # Encode the processed image
-            _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            processed_image_b64 = base64.b64encode(buffer).decode('utf-8')
+            _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            processed_image_b64 = base64.b64encode(buffer).decode("utf-8")
 
         response = PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
             preprocessing_applied=preprocessing_applied,
             inference_time_ms=round(inference_time, 2),
-            processed_image=processed_image_b64
+            processed_image=processed_image_b64,
         )
-        
+
         # Update global last prediction
         LAST_PREDICTION = response
-        
+
         return response
 
     except HTTPException:
@@ -714,6 +739,7 @@ async def predict(
     except Exception as e:
         print(f"❌ Prediction error: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
@@ -725,7 +751,7 @@ async def get_metrics():
         "model_loaded": current_model is not None,
         "model_info": current_model_info if current_model else {},
         "preprocessing_enabled": preprocessing_enabled,
-        "skip_frames": SKIP_FRAME_LIMIT
+        "skip_frames": SKIP_FRAME_LIMIT,
     }
 
 
@@ -733,9 +759,4 @@ if __name__ == "__main__":
     import uvicorn
 
     # Run server
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

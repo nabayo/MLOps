@@ -6,8 +6,6 @@ Simple and effective face anonymization for privacy protection.
 
 import os
 import tempfile
-from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -31,11 +29,11 @@ class FaceBlurStep(PreprocessingStep):
         # Import deface here to avoid import at module level
         try:
             import deface
+
             self.deface = deface
         except ImportError:
             raise ImportError(
-                "deface library not installed. "
-                "Install with: pip install deface"
+                "deface library not installed. Install with: pip install deface"
             )
 
     def process(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
@@ -48,16 +46,17 @@ class FaceBlurStep(PreprocessingStep):
         Returns:
             Image with blurred faces
         """
+
         # Convert BGR to RGB for deface
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        _image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # Save to temporary file (deface works with file paths)
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_in:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_in:
             temp_in_path = temp_in.name
             cv2.imwrite(temp_in_path, image)
 
         try:
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_out:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_out:
                 temp_out_path = temp_out.name
 
             # Run deface
@@ -67,10 +66,12 @@ class FaceBlurStep(PreprocessingStep):
             # Suppress deface output
             old_argv = sys.argv
             sys.argv = [
-                'deface',
-                '--thresh', str(self.threshold),
-                '--output', temp_out_path,
-                temp_in_path
+                "deface",
+                "--thresh",
+                str(self.threshold),
+                "--output",
+                temp_out_path,
+                temp_in_path,
             ]
 
             try:
@@ -115,10 +116,12 @@ class FastFaceBlurStep(PreprocessingStep):
         Args:
             blur_kernel_size: Size of Gaussian blur kernel (must be odd)
         """
-        self.blur_kernel_size = blur_kernel_size if blur_kernel_size % 2 == 1 else blur_kernel_size + 1
+        self.blur_kernel_size = (
+            blur_kernel_size if blur_kernel_size % 2 == 1 else blur_kernel_size + 1
+        )
 
         # Load face cascade
-        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.face_cascade = cv2.CascadeClassifier(cascade_path)
 
     def process(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
@@ -136,27 +139,22 @@ class FastFaceBlurStep(PreprocessingStep):
 
         # Detect faces
         faces = self.face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(30, 30)
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
         )
 
         # Blur each face
         result = image.copy()
-        for (x, y, w, h) in faces:
+        for x, y, w, h in faces:
             # Extract face region
-            face_roi = result[y:y+h, x:x+w]
+            face_roi = result[y : y + h, x : x + w]
 
             # Apply Gaussian blur
             blurred_face = cv2.GaussianBlur(
-                face_roi,
-                (self.blur_kernel_size, self.blur_kernel_size),
-                0
+                face_roi, (self.blur_kernel_size, self.blur_kernel_size), 0
             )
 
             # Replace face region with blurred version
-            result[y:y+h, x:x+w] = blurred_face
+            result[y : y + h, x : x + w] = blurred_face
 
         return result
 
