@@ -1,3 +1,7 @@
+"""
+Dataset loader module.
+"""
+
 from typing import Any, Optional
 
 import os
@@ -7,6 +11,15 @@ from numpy.typing import NDArray
 
 
 def get_dataset_download_path(config: dict[str, Any]) -> str:
+    """
+    Get the dataset download path.
+
+    Args:
+        config: The configuration dictionary.
+
+    Returns:
+        The dataset download path.
+    """
 
     dataset_download_path: str = config["dataset_download_path"].replace(" ", "_")
     dataset_name: str = config["dataset_name"].replace(" ", "_")
@@ -22,6 +35,15 @@ def get_dataset_download_path(config: dict[str, Any]) -> str:
 
 
 def get_annotations_path(config: dict[str, Any]) -> str:
+    """
+    Get the annotations path.
+
+    Args:
+        config: The configuration dictionary.
+
+    Returns:
+        The annotations path.
+    """
 
     dataset_download_path: str = config["dataset_download_path"].replace(" ", "_")
     dataset_name: str = config["dataset_name"].replace(" ", "_")
@@ -37,7 +59,17 @@ def get_annotations_path(config: dict[str, Any]) -> str:
 
 
 class DatasetLoader:
+    """
+    Dataset loader class.
+    """
+
     def __init__(self, config: dict[str, Any]):
+        """
+        Initialize dataset loader.
+
+        Args:
+            config: The configuration dictionary.
+        """
 
         # Config
         self.config: dict[str, Any] = config
@@ -54,6 +86,9 @@ class DatasetLoader:
         self.y_test: Optional[NDArray[np.uint8]] = None
 
     def load_data(self) -> None:
+        """
+        Load the dataset.
+        """
 
         # Load the dataset
         pass

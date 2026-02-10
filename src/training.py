@@ -472,7 +472,7 @@ class YOLOTrainer:
 
             # Start training
             print(
-                f"\n🏋️ Training {self.architecture} for {self.training_params['epochs']} epochs..."
+                f"\nTraining {self.architecture} for {self.training_params['epochs']} epochs..."
             )
             start_time = time.time()
 

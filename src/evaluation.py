@@ -14,9 +14,10 @@ from typing import Any
 import os
 from pathlib import Path
 
-import mlflow
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
+
+import mlflow
 
 
 class YOLOEvaluator:
@@ -203,12 +204,12 @@ class YOLOEvaluator:
 
         print("✓ Visualizations logged")
 
-    def _create_error_analysis(self, results) -> None:
+    def _create_error_analysis(self, _results) -> None:
         """
         Create and log error analysis visualizations.
 
         Args:
-            results: YOLO validation results
+            _results: YOLO validation results
         """
         print("\n🔍 Creating error analysis...")
 
