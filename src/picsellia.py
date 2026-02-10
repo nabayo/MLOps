@@ -1,3 +1,7 @@
+"""
+This module is used to load the dataset from Picsellia.
+"""
+
 from typing import Any
 
 import os
@@ -12,9 +16,19 @@ from src.dataset_loader import (
 from picsellia import Client as PicselliaClient
 from picsellia import Dataset as PicselliaDataset
 from picsellia import DatasetVersion as PicselliaDatasetVersion
+from picsellia.types.enums import AnnotationFileType
 
 
 def load_data(config: dict[str, Any]) -> DatasetLoader:
+    """
+    Load the dataset from Picsellia.
+
+    Args:
+        config: The configuration dictionary.
+
+    Returns:
+        The dataset loader.
+    """
 
     # Define the download path
     download_path: str = get_dataset_download_path(config)
@@ -45,30 +59,23 @@ def load_data(config: dict[str, Any]) -> DatasetLoader:
         # Download the dataset (images)
         dataset_version.download(target_path=download_path)
 
-        # Helper enum for export type
-        from picsellia.types.enums import AnnotationFileType
-
         try:
-            # Export YOLO annotations using the SDK
+            # Export YOLO annotations using the SDK, download a zip file
             print("Exporting YOLO annotations using SDK...")
             dataset_version.export_annotation_file(
                 annotation_file_type=AnnotationFileType.YOLO, target_path=download_path
             )
-            # Depending on how the SDK exports, it might create a zip or individual files.
-            # Usually it creates a zip file, so we might need to unzip it if it's zipped.
-            # But standard export usually just provides the requested format.
-            # We will handle organization in data_preparation.py
 
         except Exception as e:  # pylint: disable=broad-except
             print(f"Warning: Failed to export YOLO annotations via SDK: {e}")
             print("Falling back to manual JSON download.")
 
-        # Get the regular annotations (for fallback/validation)
-        annotations: dict[str, Any] = dataset_version.load_annotations()
+            # Get the regular annotations (for fallback/validation)
+            annotations: dict[str, Any] = dataset_version.load_annotations()
 
-        # Save the annotations
-        with open(annotations_path, "w") as f:
-            json.dump(annotations, f)
+            # Save the annotations
+            with open(annotations_path, "w", encoding="utf-8") as f:
+                json.dump(annotations, f)
 
     # Load the dataset
     dataset_loader: DatasetLoader = DatasetLoader(config)

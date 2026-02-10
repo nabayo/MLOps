@@ -8,19 +8,23 @@ Features:
 - Extensive logging and visualization
 """
 
+from typing import Any, Optional
+from pathlib import Path
+from datetime import datetime
+
 import os
 import time
-from pathlib import Path
-from typing import Any, Optional
-from datetime import datetime
+import traceback
+import yaml
+import torch
+
+import pandas as pd
+
+from ultralytics import YOLO
 
 import mlflow
 import mlflow.pytorch
 from mlflow.tracking import MlflowClient
-import yaml
-import torch
-from ultralytics import YOLO
-import pandas as pd
 
 
 class YOLOTrainer:
@@ -201,7 +205,7 @@ class YOLOTrainer:
             mlflow.log_param("gpu_count", torch.cuda.device_count())
 
         # Log config files as artifacts
-        with open("temp_training_config.yaml", "w") as f:
+        with open("temp_training_config.yaml", "w", encoding="utf-8") as f:
             yaml.dump(self.config, f)
         mlflow.log_artifact("temp_training_config.yaml", "configs")
         os.remove("temp_training_config.yaml")
@@ -348,7 +352,7 @@ class YOLOTrainer:
             try:
                 client.create_registered_model(model_name)
                 print(f"  ✓ Created registered model: {model_name}")
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 # Model already exists
                 pass
 
@@ -393,7 +397,6 @@ class YOLOTrainer:
 
         except Exception as e:  # pylint: disable=broad-except
             print(f"⚠ Model registration failed: {e}")
-            import traceback
 
             traceback.print_exc()
 
@@ -437,7 +440,8 @@ class YOLOTrainer:
         self._ensure_experiment_active()
 
         # Start MLflow run
-        run_name = f"{self.mlflow_config['run_name_prefix']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        run_name = f"{self.mlflow_config['run_name_prefix']}`\
+                    _{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         with mlflow.start_run(run_name=run_name) as run:
             self.run = run
@@ -461,7 +465,9 @@ class YOLOTrainer:
             # Log all parameters
             self._log_all_parameters(training_args)
 
-            # Force Ultralytics to use this specific run instead of creating a new one (https://mlflow.org/docs/latest/api_reference/python_api/mlflow.environment_variables.html)
+            # Force Ultralytics to use this specific run
+            # instead of creating a new one
+            # (https://mlflow.org/docs/latest/api_reference/python_api/mlflow.environment_variables.html)
             os.environ["MLFLOW_RUN_ID"] = run.info.run_id
 
             # Start training
