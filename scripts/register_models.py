@@ -1,10 +1,14 @@
+"""
+Script to register models from MLflow Model Registry.
+"""
+
 import os
 
 import mlflow
 from mlflow.tracking import MlflowClient
 
 
-def register_all_models():
+def register_all_models() -> None:
     """
     Scans all MLflow runs and tries to register models blindly from weights/best.pt
     """
@@ -29,7 +33,7 @@ def register_all_models():
 
         try:
             runs = client.search_runs(experiment_ids=[exp.experiment_id])
-        except Exception as _e:
+        except Exception as _e:  # pylint: disable=broad-except
             continue
 
         for run in runs:
@@ -58,7 +62,7 @@ def register_all_models():
                 if client.search_model_versions(f"run_id='{run_id}'"):
                     print("    ⏭ Already registered.")
                     continue
-            except Exception as _e:
+            except Exception as _e:  # pylint: disable=broad-except
                 pass
 
             # Try to register best.pt or last.pt
@@ -80,7 +84,7 @@ def register_all_models():
                             version=result.version,
                             description=f"Recovered from run {run_name} (Artifact: {pt_file})",
                         )
-                    except Exception as desc_error:
+                    except Exception as desc_error:  # pylint: disable=broad-except
                         print(
                             f"      ⚠ Warning: Could not update description: {desc_error}"
                         )
@@ -89,7 +93,7 @@ def register_all_models():
                     registered_version = result
                     break  # Success
 
-                except Exception as _e:
+                except Exception as _e:  # pylint: disable=broad-except
                     # If 404/RestException, it means artifact missing or something
                     # print(f"      warn: {_e}")
                     pass

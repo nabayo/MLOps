@@ -1,3 +1,7 @@
+"""
+Script to recover weights from MLflow Model Registry.
+"""
+
 import os
 
 from pathlib import Path
@@ -12,7 +16,11 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = "minioadmin_password_change_me"
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://localhost:9000"
 
 
-def download_all_weights():
+def download_all_weights() -> None:
+    """
+    Download all weights from MLflow Model Registry.
+    """
+
     print("Connecting to MLflow...")
     mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     client = MlflowClient()
@@ -61,18 +69,7 @@ def download_all_weights():
 
             for artifact_path in common_weight_paths:
                 try:
-                    # Construct destination: preserve filename, flatten structure inside run_dir?
-                    # Let's keep it simple: run_dir / filename
                     _filename = Path(artifact_path).name
-
-                    # Check if already exists to avoid re-downloading?
-                    # No, overwrite to be safe.
-
-                    # We download to a temp dir then move?
-                    # create run_dir if we are about to download
-
-                    # client.download_artifacts with a file path downloads just that file.
-                    # It puts it into dst_path.
 
                     print(f"    Attempting fetch: {artifact_path} ...", end="")
                     _local_path = client.download_artifacts(
@@ -82,10 +79,9 @@ def download_all_weights():
                     files_downloaded_for_run += 1
                     total_downloaded += 1
 
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     # Silent fail for missing files
                     print(" (not found)")
-                    pass
 
             if files_downloaded_for_run == 0:
                 # If we didn't get any weights, maybe clean up the empty dir?

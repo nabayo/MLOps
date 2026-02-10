@@ -4,8 +4,6 @@ Base classes for modular preprocessing pipeline.
 Allows composing multiple preprocessing steps in a pipeline.
 """
 
-from typing import List
-
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -26,12 +24,14 @@ class PreprocessingStep(ABC):
         Returns:
             Processed image in BGR format
         """
-        pass
+
+        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     def get_name(self) -> str:
         """Get the name of this preprocessing step."""
-        pass
+
+        pass  # pylint: disable=unnecessary-pass
 
 
 class PreprocessingPipeline:

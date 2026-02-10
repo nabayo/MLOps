@@ -91,4 +91,4 @@ class DatasetLoader:
         """
 
         # Load the dataset
-        pass
+        print("Loading data...")

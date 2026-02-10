@@ -5,11 +5,15 @@ Simple and effective face anonymization for privacy protection.
 """
 
 import os
+import sys
 import tempfile
 
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+
+import deface
+from deface.deface import main as deface_main
 
 from .base import PreprocessingStep
 
@@ -28,13 +32,11 @@ class FaceBlurStep(PreprocessingStep):
 
         # Import deface here to avoid import at module level
         try:
-            import deface
-
             self.deface = deface
-        except ImportError:
+        except ImportError as import_error:
             raise ImportError(
                 "deface library not installed. Install with: pip install deface"
-            )
+            ) from import_error
 
     def process(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
         """
@@ -48,20 +50,18 @@ class FaceBlurStep(PreprocessingStep):
         """
 
         # Convert BGR to RGB for deface
-        _image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        _image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
 
         # Save to temporary file (deface works with file paths)
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_in:
             temp_in_path = temp_in.name
-            cv2.imwrite(temp_in_path, image)
+            cv2.imwrite(temp_in_path, image)  # pylint: disable=no-member
 
         try:
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_out:
                 temp_out_path = temp_out.name
 
             # Run deface
-            from deface.deface import main as deface_main
-            import sys
 
             # Suppress deface output
             old_argv = sys.argv
@@ -122,7 +122,7 @@ class FastFaceBlurStep(PreprocessingStep):
 
         # Load face cascade
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        self.face_cascade = cv2.CascadeClassifier(cascade_path)
+        self.face_cascade = cv2.CascadeClassifier(cascade_path)  # pylint: disable=no-member
 
     def process(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
         """
@@ -135,7 +135,7 @@ class FastFaceBlurStep(PreprocessingStep):
             Image with blurred faces
         """
         # Convert to grayscale for detection
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
 
         # Detect faces
         faces = self.face_cascade.detectMultiScale(
@@ -149,7 +149,7 @@ class FastFaceBlurStep(PreprocessingStep):
             face_roi = result[y : y + h, x : x + w]
 
             # Apply Gaussian blur
-            blurred_face = cv2.GaussianBlur(
+            blurred_face = cv2.GaussianBlur(  # pylint: disable=no-member
                 face_roi, (self.blur_kernel_size, self.blur_kernel_size), 0
             )
 

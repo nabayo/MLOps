@@ -13,6 +13,7 @@ from typing import Any
 import json
 import random
 import shutil
+import zipfile
 from pathlib import Path
 
 import yaml
@@ -42,6 +43,9 @@ class DataPreparation:
         # Extract split ratios
         self.split_ratios = training_config["dataset"]["split_ratios"]
         self.seed = training_config["dataset"]["seed"]
+
+        # Class names
+        self.class_names: list[str] = []
 
         # Set random seeds for reproducibility
         random.seed(self.seed)
@@ -74,7 +78,7 @@ class DataPreparation:
 
         # Load and validate annotations
         try:
-            with open(annotations_path, "r") as f:
+            with open(annotations_path, "r", encoding="utf-8") as f:
                 annotations = json.load(f)
 
             if not isinstance(annotations, dict):
@@ -102,7 +106,7 @@ class DataPreparation:
 
         # Load annotations
         annotations_path = self.dataset_path / "annotations.json"
-        with open(annotations_path, "r") as f:
+        with open(annotations_path, "r", encoding="utf-8") as f:
             annotations_data = json.load(f)
 
         # Create output directories
@@ -140,9 +144,9 @@ class DataPreparation:
 
         # Check if YOLO labels were already exported by SDK
         # SDK usually puts them in a zip file/subdirectory
-        import zipfile
 
-        # 1. Search for any zip file containing "YOLO" or just any zip in the dataset path (recursive)
+        # 1. Search for any zip file containing "YOLO"
+        # or just any zip in the dataset path (recursive)
         found_zip_files = list(self.dataset_path.rglob("*.zip"))
 
         if found_zip_files:
@@ -203,7 +207,7 @@ class DataPreparation:
             # Use class names from file if available, else use inferred
             classes_file = self.dataset_path / "classes.txt"
             if classes_file.exists():
-                with open(classes_file, "r") as f:
+                with open(classes_file, "r", encoding="utf-8") as f:
                     self.class_names = [
                         line.strip() for line in f.readlines() if line.strip()
                     ]
@@ -338,7 +342,8 @@ class DataPreparation:
                     class_id = label_to_id[label]
 
                     yolo_annotations.append(
-                        f"{class_id} {x_center:.6f} {y_center:.6f} {norm_width:.6f} {norm_height:.6f}"
+                        f"{class_id} {x_center:.6f} {y_center:.6f}\
+                          {norm_width:.6f} {norm_height:.6f}"
                     )
 
             # Save label file (even if empty - indicating negative example)
@@ -346,7 +351,7 @@ class DataPreparation:
             label_path = self.labels_path / label_filename
             label_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(label_path, "w") as f:
+            with open(label_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(yolo_annotations))
 
             label_files.append(str(label_path))
@@ -405,7 +410,8 @@ class DataPreparation:
         test_images = image_files[train_size + val_size :]
 
         print(
-            f"✓ Split created: {len(train_images)} train, {len(val_images)} val, {len(test_images)} test"
+            f"✓ Split created: {len(train_images)} train,\
+             {len(val_images)} val, {len(test_images)} test"
         )
 
         return {"train": train_images, "val": val_images, "test": test_images}
@@ -465,7 +471,7 @@ class DataPreparation:
 
         # Save data.yaml
         data_yaml_path = self.output_path / "data.yaml"
-        with open(data_yaml_path, "w") as f:
+        with open(data_yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(data_config, f, default_flow_style=False, sort_keys=False)
 
         print(f"✓ data.yaml generated: {data_yaml_path}")
