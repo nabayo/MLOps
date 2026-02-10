@@ -21,4 +21,4 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Run tests
         run: |
-          python -m pytest --cov=./ --cov-report=html
+          python -m pytest --cov=./ --cov-report=xml

@@ -1,5 +1,6 @@
 services:
-  # PostgreSQL - MLflow backend store
+
+  # Service 1 : PostgreSQL - MLflow backend store
   postgres:
     image: postgres:16-alpine
     container_name: mlops-postgres
@@ -18,7 +19,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # MinIO - S3-compatible artifact store
+  # Service 2 : MinIO - S3-compatible artifact store
   minio:
     image: minio/minio:latest
     container_name: mlops-minio
@@ -40,7 +41,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # MinIO bucket creator (runs once)
+  # Service 2.5 : MinIO bucket creator (runs once)
   minio-create-bucket:
     image: minio/mc:latest
     container_name: mlops-minio-setup
@@ -52,7 +53,7 @@ services:
     networks:
       - mlops-network
 
-  # MLflow Tracking Server
+  # Service 3 : MLflow Tracking Server
   mlflow:
     build:
       context: ./mlflow
@@ -82,7 +83,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Training Pipeline (run manually or via CI/CD)
+  # Service 4 : Training Pipeline (run manually or via CI/CD)
   training:
     build:
       context: .
@@ -112,7 +113,7 @@ services:
     profiles:
       - donotautostart # Only run when explicitly requested
 
-  # Serving API
+  # Service 5 : Serving API
   serving:
     build:
       context: .
@@ -137,7 +138,7 @@ services:
       - mlops-network
     restart: unless-stopped
 
-  # MLflow Export Service
+  # Service 6 : MLflow Export Service
   export:
     build:
       context: .
@@ -163,7 +164,7 @@ services:
     profiles:
       - tools
 
-  # MLflow Import Service
+  # Service 7 : MLflow Import Service
   import:
     build:
       context: .
@@ -192,7 +193,7 @@ services:
     profiles:
       - tools
 
-  # Frontend Dashboard
+  # Service 8 : Frontend Dashboard
   frontend:
     build:
       context: ./frontend

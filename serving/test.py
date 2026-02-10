@@ -1,14 +1,23 @@
+"""
+Test the trained models.
+"""
+
+from pathlib import Path
+
 import os
 import sys
+import random
 import datetime
 import traceback
-from pathlib import Path
-import mlflow
-from dotenv import load_dotenv
 import tempfile
 
-import random
+from dotenv import load_dotenv
+
+from ultralytics import YOLO
+
+import mlflow
 from mlflow.tracking import MlflowClient
+
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -57,7 +66,7 @@ def list_models() -> dict[str, tuple[str, str, list[str]]]:
                 try:
                     dt = datetime.datetime.fromtimestamp(start_time / 1000)
                     time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                except Exception as _e:
+                except Exception as _e:  # pylint: disable=broad-except
                     time_str = str(start_time)
 
                 print(f"  Run ID: {run_id}")
@@ -75,25 +84,27 @@ def list_models() -> dict[str, tuple[str, str, list[str]]]:
                     weights_found.extend(
                         [a.path for a in artifacts_root if a.path.endswith(".pt")]
                     )
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     # Root listing failed, not critical
                     pass
 
                 # 2. Check for common weights using "Blind Download" trick
-                # list_artifacts('weights') fails with 404, so we test existence by trying to download
+                # list_artifacts('weights') fails with 404
+                # so we test existence by trying to download
                 # to a temp directory.
                 potential_weights = ["weights/best.pt", "weights/last.pt"]
 
                 with tempfile.TemporaryDirectory() as temp_dir:
                     for weight_path in potential_weights:
                         try:
-                            # We don't need the file, just want to know if it downloads without error
+                            # We don't need the file,
+                            # just want to know if it downloads without error
                             # This is SLOW (downloads full file) but reliable given the API issues
                             client.download_artifacts(
                                 run_id, weight_path, dst_path=temp_dir
                             )
                             weights_found.append(weight_path)
-                        except Exception:
+                        except Exception:  # pylint: disable=broad-except
                             # Failed to download, so it likely doesn't exist
                             pass
 
@@ -117,8 +128,6 @@ def list_models() -> dict[str, tuple[str, str, list[str]]]:
 
 
 #
-
-
 def load_dataset() -> list[Path]:
     """
     Load all valid images from the dataset directory.
@@ -142,6 +151,9 @@ def load_dataset() -> list[Path]:
 
 
 def my_main():
+    """
+    Main function to test the models.
+    """
 
     dict_weights = list_models()
     # print(dict_weights)
@@ -154,7 +166,7 @@ def my_main():
     client = MlflowClient()
 
     #
-    for run_id, (exp_name, status, weights_found) in dict_weights.items():
+    for run_id, (exp_name, _status, weights_found) in dict_weights.items():
         print("\n" + "*" * 60)
         print(f"Testing Run: {run_id} ({exp_name})")
         print(f"Available weights: {weights_found}")
@@ -173,8 +185,6 @@ def my_main():
                     print(f"    Downloaded to: {local_weight_path}")
 
                     try:
-                        from ultralytics import YOLO
-
                         model = YOLO(local_weight_path)
 
                         # Select 5 random images

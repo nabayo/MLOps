@@ -11,19 +11,20 @@ Features:
 
 from typing import Any, Optional
 from datetime import datetime
+from pathlib import Path
 
 import os
-import cv2
 import sys
 import time
 import base64
-import mlflow
-import uvicorn
-import tempfile
 import traceback
+import mlflow
+import tempfile
+import uvicorn
 import numpy as np
 
-from pathlib import Path
+import cv2
+
 from ultralytics import YOLO
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -33,7 +34,17 @@ from mlflow.tracking import MlflowClient
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.preprocessing import FastFaceBlurStep
+try:
+    # Add parent directory to path if not already there
+    PARENT_DIR = str(Path(__file__).parent.parent)
+    if PARENT_DIR not in sys.path:
+        sys.path.insert(0, PARENT_DIR)
+
+    from src.preprocessing import FastFaceBlurStep
+
+except ImportError as e:
+    print(f"Warning: Could not import preprocessing module: {e}")
+    FastFaceBlurStep = None
 
 # Load environment
 load_dotenv()
@@ -59,15 +70,8 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 client = MlflowClient()
 
-# Global model state
-current_model = None
-current_model_info = {}
+# Global configuration
 preprocessing_enabled = os.getenv("ENABLE_PREPROCESSING", "false").lower() == "true"
-
-# Skip frame global state
-SKIP_FRAME_LIMIT = 6  # Default skip frames
-FRAME_COUNTER = 0
-LAST_PREDICTION = None
 
 
 # Pydantic models
@@ -129,6 +133,21 @@ class RunInfo(BaseModel):
     available_weights: list[str] = []
 
 
+class GlobalState:
+    """Manages global application state without using the 'global' statement."""
+
+    def __init__(self):
+        self.current_model = None
+        self.current_model_info: dict[str, Any] = {}
+        self.blur_step: Any = None
+        self.skip_frame_limit = 6
+        self.frame_counter = 0
+        self.last_prediction: Optional[PredictionResponse] = None
+
+
+state = GlobalState()
+
+
 # Helper functions
 def load_model_from_registry(
     model_name: str, version: Optional[str] = None, stage: Optional[str] = None
@@ -144,7 +163,6 @@ def load_model_from_registry(
     Returns:
         Model info dictionary
     """
-    global current_model, current_model_info
 
     try:
         # Determine model URI
@@ -200,7 +218,7 @@ def load_model_from_registry(
                 run_id=run_id, artifact_path=artifact_path
             )
             print(f"✓ Downloaded to: {local_path}")
-        except Exception as _download_error:
+        except Exception as _download_error:  # pylint: disable=broad-except
             # If the exact path fails, try common alternatives
             print("First attempt failed, trying alternatives...")
             alternatives = ["weights/best.pt", "model/weights/best.pt", "best.pt"]
@@ -213,13 +231,14 @@ def load_model_from_registry(
                     )
                     print(f"✓ Found at: {alt_path}")
                     break
-                except Exception as _e:
+                except Exception as _e:  # pylint: disable=broad-except
                     continue
 
             if not local_path:
                 raise ValueError(
-                    f"Could not find model weights. Tried: {artifact_path}, {alternatives}"
-                )
+                    f"Could not find model weights.\
+                         Tried: {artifact_path}, {alternatives}"
+                ) from _download_error
 
         # Load YOLO model
         model = YOLO(local_path)
@@ -244,8 +263,8 @@ def load_model_from_registry(
             "loaded_at": datetime.now().isoformat(),
         }
 
-        current_model = model
-        current_model_info = model_info
+        state.current_model = model
+        state.current_model_info = model_info
 
         print(
             f"✓ Model loaded: {model_name} v{model_version.version} ({model_version.current_stage})"
@@ -253,29 +272,21 @@ def load_model_from_registry(
         return model_info
 
     except Exception as e:  # pylint: disable=broad-except
-        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
-
-
-# Global preprocessing steps
-blur_step = None
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load model: {str(e)}"
+        ) from e
 
 
 def get_blur_step():
     """Lazy initialization of blur step."""
-    global blur_step
-    if blur_step is None:
+    if state.blur_step is None:
         try:
-            # Add parent directory to path if not already there
-            parent_dir = str(Path(__file__).parent.parent)
-            if parent_dir not in sys.path:
-                sys.path.insert(0, parent_dir)
-
             print("Initializing FastFaceBlurStep...")
-            blur_step = FastFaceBlurStep(blur_kernel_size=51)
+            state.blur_step = FastFaceBlurStep(blur_kernel_size=51)
         except ImportError as e:
             print(f"Warning: Could not import preprocessing module: {e}")
             return None
-    return blur_step
+    return state.blur_step
 
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
@@ -298,7 +309,7 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
         return step.process(image)
     else:
         # Fallback to simple Gaussian blur if module not found
-        return cv2.GaussianBlur(image, (51, 51), 0)
+        return cv2.GaussianBlur(image, (51, 51), 0)  # pylint: disable=no-member
 
 
 # API Endpoints
@@ -330,7 +341,7 @@ async def health_check():
     return {
         "status": "healthy",
         "mlflow_uri": MLFLOW_TRACKING_URI,
-        "model_loaded": current_model is not None,
+        "model_loaded": state.current_model is not None,
         "preprocessing_enabled": preprocessing_enabled,
     }
 
@@ -338,10 +349,10 @@ async def health_check():
 @app.get("/models/current", response_model=ModelInfo)
 async def get_current_model():
     """Get information about currently loaded model."""
-    if current_model is None:
+    if state.current_model is None:
         raise HTTPException(status_code=404, detail="No model currently loaded")
 
-    return ModelInfo(**current_model_info)
+    return ModelInfo(**state.current_model_info)
 
 
 @app.get("/models/list")
@@ -363,7 +374,7 @@ async def list_models() -> list[dict[str, Any]]:
                     m = client.get_registered_model(name_to_check)
                     print(f"Fallback: Found {name_to_check} via direct lookup")
                     registered_models.append(m)
-                except Exception as _e:
+                except Exception as _e:  # pylint: disable=broad-except
                     pass
 
         models_info = []
@@ -404,7 +415,9 @@ async def list_models() -> list[dict[str, Any]]:
         return models_info
 
     except Exception as e:  # pylint: disable=broad-except
-        raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list models: {str(e)}"
+        ) from e
 
 
 @app.post("/models/load")
@@ -469,18 +482,18 @@ async def list_experiments() -> list[dict[str, Any]]:
 
     except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(
-            status_code=500, detail=f"Failed to list experiments: {str(e)}"
-        )
+            status_code=500,
+            detail=f"Failed to list experiments: {str(e)}",
+        ) from e
 
 
 @app.post("/config/skip_frames")
 async def set_skip_frames(config: SkipFrameConfig):
     """Set the number of frames to skip between inferences."""
-    global SKIP_FRAME_LIMIT, FRAME_COUNTER
-    SKIP_FRAME_LIMIT = config.skip_frames
-    FRAME_COUNTER = 0  # Reset counter when config changes
-    print(f"✓ Skip frame limit set to: {SKIP_FRAME_LIMIT}")
-    return {"status": "success", "skip_frames": SKIP_FRAME_LIMIT}
+    state.skip_frame_limit = config.skip_frames
+    state.frame_counter = 0  # Reset counter when config changes
+    print(f"✓ Skip frame limit set to: {state.skip_frame_limit}")
+    return {"status": "success", "skip_frames": state.skip_frame_limit}
 
 
 def check_run_weights(run_id: str) -> list[str]:
@@ -498,7 +511,7 @@ def check_run_weights(run_id: str) -> list[str]:
                 # Blind download attempt
                 client.download_artifacts(run_id, weight_path, dst_path=temp_dir)
                 verified_weights.append(weight_path)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 # Failed means likely doesn't exist
                 pass
 
@@ -515,7 +528,6 @@ async def load_run_weights(
     """
     Load a model from a specific run's weight file.
     """
-    global current_model, current_model_info
 
     print(f"Loading model from run: {run_id}, path: {artifact_path}")
 
@@ -565,8 +577,8 @@ async def load_run_weights(
             "loaded_at": datetime.now().isoformat(),
         }
 
-        current_model = model
-        current_model_info = model_info
+        state.current_model = model
+        state.current_model_info = model_info
 
         return {
             "status": "success",
@@ -578,7 +590,9 @@ async def load_run_weights(
         print(f"❌ Load failed: {e}")
 
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to load weights: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load weights: {str(e)}"
+        ) from e
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -591,33 +605,32 @@ async def predict(
 
     Returns finger count and predictions.
     """
-    if current_model is None:
+    if state.current_model is None:
         raise HTTPException(status_code=503, detail="No model loaded")
 
     try:
         # Read image
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)  # pylint: disable=no-member
 
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
 
         # Skip frame logic
-        global FRAME_COUNTER, LAST_PREDICTION
 
         # Increment counter
-        FRAME_COUNTER += 1
+        state.frame_counter += 1
 
         # Check if we should skip
-        if skip_check and FRAME_COUNTER < SKIP_FRAME_LIMIT:
+        if skip_check and state.frame_counter < state.skip_frame_limit:
             # Skip inference
-            # print(f"⏭ Skipping frame {FRAME_COUNTER}/{SKIP_FRAME_LIMIT}")
+            # print(f"⏭ Skipping frame {state.frame_counter}/{state.skip_frame_limit}")
 
             # Return last prediction if available to keep UI stable
-            if LAST_PREDICTION:
+            if state.last_prediction:
                 # Update inference time to 0 to indicate skip
-                last_response = LAST_PREDICTION.copy()
+                last_response = state.last_prediction.copy()
                 last_response.inference_time_ms = 0
                 return last_response
 
@@ -631,7 +644,7 @@ async def predict(
             )
 
         # Start Frame processing, Reset counter
-        FRAME_COUNTER = 0
+        state.frame_counter = 0
 
         # Preprocessing
         preprocessing_applied = False
@@ -641,7 +654,7 @@ async def predict(
                 image = preprocess_image(image)
                 preprocessing_applied = True
                 print("✓ Preprocessing applied successfully")
-            except Exception as prep_error:
+            except Exception as prep_error:  # pylint: disable=broad-except
                 print(f"⚠ Preprocessing failed: {prep_error}")
                 # Continue without preprocessing
                 traceback.print_exc()
@@ -651,14 +664,16 @@ async def predict(
         start_time = time.time()
 
         try:
-            results = current_model.predict(image, conf=0.15, iou=0.7, verbose=False)
+            results = state.current_model.predict(
+                image, conf=0.15, iou=0.7, verbose=False
+            )
         except Exception as inf_error:
             print(f"❌ Inference failed: {inf_error}")
 
             traceback.print_exc()
             raise HTTPException(
                 status_code=500, detail=f"Inference failed: {str(inf_error)}"
-            )
+            ) from inf_error
 
         inference_time = (time.time() - start_time) * 1000
 
@@ -672,9 +687,7 @@ async def predict(
             if result.boxes is not None:
                 boxes = result.boxes
 
-                for i in range(len(boxes)):
-                    box = boxes[i]
-
+                for box in boxes:
                     # Get class info
                     class_id = int(box.cls[0])
                     class_name = result.names[class_id]
@@ -699,7 +712,7 @@ async def predict(
                             finger_count += int(class_name)
                         elif "-" in class_name:
                             finger_count += int(class_name.split("-")[-1])
-                    except Exception as _e:
+                    except Exception as _e:  # pylint: disable=broad-except
                         finger_count += 1  # Fallback
 
         print(
@@ -722,7 +735,7 @@ async def predict(
         )
 
         # Update global last prediction
-        LAST_PREDICTION = response
+        state.last_prediction = response
 
         return response
 
@@ -732,17 +745,19 @@ async def predict(
         print(f"❌ Prediction error: {e}")
 
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Prediction failed: {str(e)}"
+        ) from e
 
 
 @app.get("/metrics")
 async def get_metrics():
     """Get simple metrics (for Prometheus, etc.)."""
     return {
-        "model_loaded": current_model is not None,
-        "model_info": current_model_info if current_model else {},
+        "model_loaded": state.current_model is not None,
+        "model_info": state.current_model_info if state.current_model else {},
         "preprocessing_enabled": preprocessing_enabled,
-        "skip_frames": SKIP_FRAME_LIMIT,
+        "skip_frames": state.skip_frame_limit,
     }
 
 
