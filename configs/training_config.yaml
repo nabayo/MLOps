@@ -6,7 +6,7 @@
 model:
   # Architecture: yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolo26n, yolo26s, yolo26m, yolo26l, yolo26x
   architecture: "yolo26s"
-  
+
   # Pretrained weights (set to null to train from scratch)
   pretrained: true
 
@@ -20,13 +20,13 @@ dataset:
     train: 0.8
     val: 0.1
     test: 0.1
-  
+
   # Random seed for reproducibility
   seed: 54
-  
+
   # Image size for training (must be multiple of 32)
   img_size: 640
-  
+
   # Auto-generate data.yaml if not present
   auto_generate_config: true
 
@@ -39,37 +39,37 @@ training:
 
   # Patience / Early Stopping
   patience: 30
-  
+
   # Batch size (adjust based on GPU memory)
   batch_size: 8
-  
+
   # Number of workers for data loading
   workers: 8
-  
+
   # Initial learning rate
   lr0: 0.1
-  
+
   # Final learning rate (lr0 * lrf)
   lrf: 0.01
-  
+
   # SGD momentum / Adam beta1
   momentum: 0.937
-  
+
   # Optimizer weight decay
   weight_decay: 0.0
-  
+
   # Warmup epochs
   warmup_epochs: 0.0
-  
+
   # Warmup initial momentum
   warmup_momentum: 0.0
-  
+
   # Warmup initial bias lr
   warmup_bias_lr: 0.0
-  
+
   # Use automatic mixed precision (AMP)
   amp: false
-  
+
   # Close mosaic augmentation in final N epochs
   close_mosaic: 10
 
@@ -79,40 +79,40 @@ training:
 augmentation:
   # HSV-Hue augmentation (fraction)
   hsv_h: 0.015
-  
+
   # HSV-Saturation augmentation (fraction)
   hsv_s: 0.7
-  
+
   # HSV-Value augmentation (fraction)
   hsv_v: 0.4
-  
+
   # Image rotation (+/- deg)
   degrees: 0.0
-  
+
   # Image translation (+/- fraction)
   translate: 0.1
-  
+
   # Image scale (+/- gain)
   scale: 0.5
-  
+
   # Image shear (+/- deg)
   shear: 0.0
-  
+
   # Image perspective (+/- fraction)
   perspective: 0.0
-  
+
   # Flip up-down probability
   flipud: 0.0
-  
+
   # Flip left-right probability
   fliplr: 0.5
-  
+
   # Mosaic augmentation probability
   mosaic: 1.0
-  
+
   # MixUp augmentation probability
   mixup: 0.0
-  
+
   # Copy-paste augmentation probability
   copy_paste: 0.0
 
@@ -122,32 +122,32 @@ augmentation:
 mlflow:
   # Experiment name
   experiment_name: "yolov26-small-finger-counting"
-  
+
   # Run name prefix (will be suffixed with timestamp)
   run_name_prefix: "yolo26s-train"
-  
+
   # Tags to add to the run
   tags:
     project: "MLOps Finger Counting"
     framework: "Ultralytics YOLOv26"
     task: "object-detection"
     dataset: "finger-counting"
-  
+
   # Log frequency (epochs)
   log_interval: 1
-  
+
   # Save top N models
   save_top_k: 3
-  
+
   # Metric to monitor for best model
   monitor_metric: "metrics/mAP50-95(B)"
-  
+
   # Model registry name (Now handled dynamically in code)
   # registered_model_name: "yolov26-nano-finger-counting"
-  
+
   # Auto-register best model
   auto_register: true
-  
+
   # Model stage after registration (None, Staging, Production)
   auto_promote_stage: "Production"
 
@@ -157,16 +157,16 @@ mlflow:
 validation:
   # Validation interval (epochs)
   val_interval: 1
-  
+
   # Save validation predictions
   save_predictions: true
-  
+
   # Number of prediction samples to save
   num_prediction_samples: 20
-  
+
   # Confidence threshold for predictions
   conf_threshold: 0.25
-  
+
   # IOU threshold for NMS
   iou_threshold: 0.7
 
@@ -177,7 +177,7 @@ device:
   # Device to use: 'cpu', 'cuda', 'cuda:0', etc.
   # Set to null for auto-detection
   device: null
-  
+
   # Enable DDP (Distributed Data Parallel)
   ddp: false
 
@@ -187,6 +187,6 @@ device:
 paths:
   # Output directory for experiments
   output_dir: "experiments"
-  
+
   # Cache directory
   cache_dir: "cache"

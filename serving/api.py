@@ -143,6 +143,9 @@ class GlobalState:
         self.skip_frame_limit = 6
         self.frame_counter = 0
         self.last_prediction: Optional[PredictionResponse] = None
+        # Experiments cache
+        self.experiments_cache: Optional[list[dict[str, Any]]] = None
+        self.experiments_cache_time: float = 0.0
 
 
 state = GlobalState()
@@ -435,55 +438,85 @@ async def load_model(
     }
 
 
-@app.get("/models/experiments")
-async def list_experiments() -> list[dict[str, Any]]:
-    """List all MLflow experiments with runs."""
-    try:
-        experiments = client.search_experiments()
+def _fetch_experiments() -> list[dict[str, Any]]:
+    """Fetch experiments from MLflow and update the cache."""
+    experiments = client.search_experiments()
 
-        experiments_info = []
-        for exp in experiments:
-            # Get runs for this experiment
-            runs = client.search_runs(exp.experiment_id, max_results=100)
+    experiments_info = []
+    for exp in experiments:
+        # Get runs for this experiment
+        runs = client.search_runs(exp.experiment_id, max_results=100)
 
-            runs_info = []
-            for run in runs:
-                # Extract metrics
-                metrics = {}
-                for key, value in run.data.metrics.items():
-                    if "final_" in key:
-                        metrics[key.replace("final_", "")] = value
+        runs_info = []
+        for run in runs:
+            # Extract metrics
+            metrics = {}
+            for key, value in run.data.metrics.items():
+                if "final_" in key:
+                    metrics[key.replace("final_", "")] = value
 
-                runs_info.append(
-                    {
-                        "run_id": run.info.run_id,
-                        "run_name": run.data.tags.get("mlflow.runName", "Unnamed"),
-                        "start_time": datetime.fromtimestamp(
-                            run.info.start_time / 1000
-                        ).isoformat(),
-                        "status": run.info.status,
-                        "metrics": metrics,
-                        "params": dict(run.data.params),
-                        "tags": dict(run.data.tags),
-                        "available_weights": check_run_weights(run.info.run_id),
-                    }
-                )
-
-            experiments_info.append(
+            runs_info.append(
                 {
-                    "experiment_id": exp.experiment_id,
-                    "experiment_name": exp.name,
-                    "run_count": len(runs),
-                    "runs": runs_info,
+                    "run_id": run.info.run_id,
+                    "run_name": run.data.tags.get("mlflow.runName", "Unnamed"),
+                    "start_time": datetime.fromtimestamp(
+                        run.info.start_time / 1000
+                    ).isoformat(),
+                    "status": run.info.status,
+                    "metrics": metrics,
+                    "params": dict(run.data.params),
+                    "tags": dict(run.data.tags),
+                    "available_weights": check_run_weights(run.info.run_id),
                 }
             )
 
-        return experiments_info
+        experiments_info.append(
+            {
+                "experiment_id": exp.experiment_id,
+                "experiment_name": exp.name,
+                "run_count": len(runs),
+                "runs": runs_info,
+            }
+        )
+
+    state.experiments_cache = experiments_info
+    state.experiments_cache_time = time.time()
+    return experiments_info
+
+
+@app.get("/models/experiments")
+async def list_experiments() -> list[dict[str, Any]]:
+    """List all MLflow experiments with runs (cached)."""
+    try:
+        # Return cached data if still valid
+        if state.experiments_cache is not None:
+            return state.experiments_cache
+
+        return _fetch_experiments()
 
     except Exception as e:  # pylint: disable=broad-except
         raise HTTPException(
             status_code=500,
             detail=f"Failed to list experiments: {str(e)}",
+        ) from e
+
+
+@app.post("/models/experiments/refresh")
+async def refresh_experiments() -> dict[str, Any]:
+    """Force-refresh the experiments cache."""
+    try:
+        data = _fetch_experiments()
+        return {
+            "status": "success",
+            "experiment_count": len(data),
+            "cached_at": datetime.fromtimestamp(
+                state.experiments_cache_time
+            ).isoformat(),
+        }
+    except Exception as e:  # pylint: disable=broad-except
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh experiments: {str(e)}",
         ) from e
 
 
