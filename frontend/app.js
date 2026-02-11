@@ -18,6 +18,11 @@ let inferenceInterval = null;
 let currentModelInfo = null;
 let fpsCounter = { frames: 0, lastTime: Date.now() };
 
+// Client-side frame skipping state
+let lastPredictions = [];
+let skipFrameCounter = 0;
+let skipFrameLimit = 6;
+
 // ============================================================================
 // Page Navigation
 // ============================================================================
@@ -39,9 +44,7 @@ function initNavigation() {
             document.getElementById(`page-${pageName}`).classList.add('active');
 
             // Load page data
-            if (pageName === 'models') {
-                loadModels();
-            } else if (pageName === 'experiments') {
+            if (pageName === 'experiments') {
                 loadExperiments();
             } else if (pageName === 'analysis') {
                 initAnalysisPage();
@@ -137,7 +140,7 @@ async function handleAnalysisImage(file) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_BASE_URL}/predict`, {
+        const response = await fetch(`${API_BASE_URL}/predict?skip_check=false`, {
             method: 'POST',
             body: formData
         });
@@ -318,9 +321,22 @@ function stopWebcam() {
 function startInference() {
     const video = document.getElementById('webcam');
 
-    // Run inference every 100ms (10 FPS)
+    // Reset client-side skip counter
+    skipFrameCounter = 0;
+
+    // Run inference loop every 100ms (10 FPS)
     inferenceInterval = setInterval(async () => {
-        await runInference(video);
+        skipFrameCounter++;
+
+        if (skipFrameCounter >= skipFrameLimit) {
+            // Time for a real prediction
+            skipFrameCounter = 0;
+            await runInference(video);
+        } else {
+            // Skipped frame: redraw last known predictions over the live video
+            drawPredictions(lastPredictions);
+        }
+
         updateFPS();
     }, 100);
 }
@@ -349,7 +365,7 @@ async function runInference(video) {
         const formData = new FormData();
         formData.append('file', blob, 'frame.jpg');
 
-        const response = await fetch(`${API_BASE_URL}/predict`, {
+        const response = await fetch(`${API_BASE_URL}/predict?skip_check=false`, {
             method: 'POST',
             body: formData
         });
@@ -406,6 +422,9 @@ async function runInference(video) {
         // Update displays
         updateFingerCount(data.finger_count);
         updatePredictionsList(data.predictions);
+
+        // Store last predictions for overlay on skipped frames
+        lastPredictions = data.predictions || [];
 
         // Update latency
         const latency = performance.now() - startTime;
@@ -531,59 +550,8 @@ function updateModelDisplay(modelInfo) {
 }
 
 // ============================================================================
-// Model Selection Page
+// Model Loading (from experiments page)
 // ============================================================================
-
-async function loadModels() {
-    const gridEl = document.getElementById('modelsGrid');
-    gridEl.innerHTML = '<div class="loading">Loading models...</div>';
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/models/list`);
-
-        if (!response.ok) {
-            throw new Error('Failed to load models');
-        }
-
-        const models = await response.json();
-
-        if (models.length === 0) {
-            gridEl.innerHTML = '<p class="empty-state">No models found in registry</p>';
-            return;
-        }
-
-        gridEl.innerHTML = models.map(model => `
-            <div class="model-card">
-                <h3 class="model-name">${model.name}</h3>
-                <p class="model-desc">${model.description || 'No description'}</p>
-                <div class="model-versions">
-                    ${model.versions.map(version => `
-                        <div class="version-item">
-                            <div class="version-header">
-                                <span class="version-num">v${version.version}</span>
-                                <span class="badge badge-${version.stage.toLowerCase()}">${version.stage}</span>
-                            </div>
-                            <div class="version-metrics">
-                                ${Object.entries(version.metrics || {}).slice(0, 3).map(([k, v]) => `
-                                    <span class="metric">${k}: ${v.toFixed(4)}</span>
-                                `).join('')}
-                            </div>
-                            <button class="btn btn-sm btn-primary"
-                                    onclick="loadModel('${model.name}', '${version.version}')">
-                                Load Model
-                            </button>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `).join('');
-
-    } catch (error) {
-        console.error('Error loading models:', error);
-        gridEl.innerHTML = `<p class="error-state">Error: ${error.message}</p>`;
-        showToast('Failed to load models', 'error');
-    }
-}
 
 async function loadModel(modelName, version) {
     try {
@@ -642,26 +610,13 @@ async function loadRunWeights(runId, artifactPath) {
 // Skip Frame Configuration
 // ============================================================================
 
-async function setSkipFrames(value) {
-    try {
-        const response = await fetch(`${API_BASE_URL}/config/skip_frames`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ skip_frames: parseInt(value) })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to update skip frames');
-        }
-
-        const data = await response.json();
-        showToast(`Skip frames set to ${data.skip_frames}`, 'success');
-
-    } catch (error) {
-        console.error('Error setting skip frames:', error);
-        showToast('Failed to update skip frames', 'error');
+function setSkipFrames(value) {
+    const parsed = parseInt(value);
+    if (!isNaN(parsed) && parsed >= 0) {
+        skipFrameLimit = parsed;
+        skipFrameCounter = 0;
+        console.log(`✓ Client-side skip frame limit set to: ${skipFrameLimit}`);
+        showToast(`Skip frames set to ${skipFrameLimit}`, 'success');
     }
 }
 
@@ -773,9 +728,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('startWebcam').addEventListener('click', startWebcam);
     document.getElementById('stopWebcam').addEventListener('click', stopWebcam);
     document.getElementById('changeModelBtn').addEventListener('click', () => {
-        document.querySelectorAll('.nav-link')[1].click(); // Switch to models page
+        // Navigate to experiments page to change model
+        document.querySelector('.nav-link[data-page="experiments"]').click();
     });
-    document.getElementById('refreshModels').addEventListener('click', loadModels);
     document.getElementById('skipFrameInput').addEventListener('change', (e) => setSkipFrames(e.target.value));
     document.getElementById('refreshExperiments').addEventListener('click', loadExperiments);
 

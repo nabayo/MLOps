@@ -17,8 +17,7 @@
         </div>
         <div class="nav-links">
             <a href="#" class="nav-link active" data-page="inference">Live Inference</a>
-            <a href="#" class="nav-link" data-page="analysis">Analysis</a>
-            <a href="#" class="nav-link" data-page="models">Model Selection</a>
+            <a href="#" class="nav-link" data-page="analysis">Custom Image</a>
             <a href="#" class="nav-link" data-page="experiments">Experiments</a>
         </div>
     </nav>
@@ -30,6 +29,10 @@
             <div class="page-header">
                 <h2>Real-Time Inference</h2>
                 <p>Live webcam feed with YOLO finger detection</p>
+                <div class="control-group">
+                    <label for="skipFrameInput">Skip Frames:</label>
+                    <input type="number" id="skipFrameInput" min="0" max="60" value="6" class="input-control">
+                </div>
             </div>
 
             <div class="inference-grid">
@@ -99,11 +102,11 @@
             </div>
         </div>
 
-        <!-- Page 4: Analysis -->
+        <!-- Page: Custom Image -->
         <div id="page-analysis" class="page">
             <div class="page-header">
-                <h2>Image Analysis</h2>
-                <p>Upload images for custom analysis with the current model</p>
+                <h2>Custom Image</h2>
+                <p>Upload images for analysis with the current model</p>
             </div>
 
             <div class="analysis-grid">
@@ -143,22 +146,7 @@
             </div>
         </div>
 
-        <!-- Page 2: Model Selection -->
-        <div id="page-models" class="page">
-            <div class="page-header">
-                <h2>Model Selection</h2>
-                <p>Browse and select models from MLflow Model Registry</p>
-                <button id="refreshModels" class="btn btn-primary">🔄 Refresh</button>
-                <div class="control-group">
-                    <label for="skipFrameInput">Skip Frames:</label>
-                    <input type="number" id="skipFrameInput" min="0" max="60" value="6" class="input-control">
-                </div>
-            </div>
 
-            <div id="modelsGrid" class="models-grid">
-                <div class="loading">Loading models...</div>
-            </div>
-        </div>
 
         <!-- Page 3: Experiments Dashboard -->
         <div id="page-experiments" class="page">
