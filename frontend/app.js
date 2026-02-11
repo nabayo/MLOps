@@ -95,7 +95,7 @@ function setupUploadListeners(dropZone, input, btn) {
     // Prevent default behaviors for all drag events to stop browser from opening file
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, preventDefaults, false);
-        // Also add to document to be safe? No, just zone is enough usually if we are precise, 
+        // Also add to document to be safe? No, just zone is enough usually if we are precise,
         // but if user misses zone, it opens. Let's stick to zone for now, user asked "if I drag ... in the browser".
         // To be safe, we should prevent default on the whole document for drop if it's not in the zone, or just the zone.
         // Let's fix the zone first.
@@ -671,7 +671,7 @@ async function loadExperiments() {
                                     <td>
                                         <div class="weights-actions">
                                             ${(run.available_weights || []).map(w => `
-                                                <button class="btn btn-xs btn-outline" 
+                                                <button class="btn btn-xs btn-outline"
                                                         onclick="loadRunWeights('${run.run_id}', '${w}')"
                                                         title="Load ${w}">
                                                     ${w.split('/').pop()}
