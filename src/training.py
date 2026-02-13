@@ -467,7 +467,8 @@ class YOLOTrainer:
 
             # Force Ultralytics to use this specific run
             # instead of creating a new one
-            # (https://mlflow.org/docs/latest/api_reference/python_api/mlflow.environment_variables.html)
+            # (https://mlflow.org/docs/latest/api_reference/python_api/\
+            # mlflow.environment_variables.html)
             os.environ["MLFLOW_RUN_ID"] = run.info.run_id
 
             # Start training

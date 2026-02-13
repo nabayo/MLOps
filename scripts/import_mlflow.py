@@ -401,8 +401,10 @@ def main() -> None:
     args = parser.parse_args()
 
     # Set tracking URI if provided
-    if args.tracking_uri:
-        mlflow.set_tracking_uri(args.tracking_uri)
+    uri = args.tracking_uri
+    if uri:
+        print(f"Using custom tracking URI: {uri}")
+        mlflow.set_tracking_uri(uri)
 
     try:
         MLflowImporter(

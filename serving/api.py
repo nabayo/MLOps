@@ -12,8 +12,6 @@ Features:
 from typing import Any, Optional
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
-from pydantic import BaseModel
 
 import os
 import sys
@@ -21,6 +19,8 @@ import time
 import tempfile
 import traceback
 
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
 import cv2
 import uvicorn
@@ -319,9 +319,9 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
     if step:
         return step.process(image)
-    else:
-        # Fallback to simple Gaussian blur if module not found
-        return cv2.GaussianBlur(image, (51, 51), 0)  # pylint: disable=no-member
+
+    # Fallback to simple Gaussian blur if module not found
+    return cv2.GaussianBlur(image, (51, 51), 0)  # pylint: disable=no-member
 
 
 # API Endpoints
