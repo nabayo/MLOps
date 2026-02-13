@@ -22,6 +22,8 @@ let fpsCounter = { frames: 0, lastTime: Date.now() };
 let lastPredictions = [];
 let skipFrameCounter = 0;
 let skipFrameLimit = 6;
+let isInferring = false;
+let analysisInitialized = false;
 
 // ============================================================================
 // Page Navigation
@@ -46,7 +48,7 @@ function initNavigation() {
             // Load page data
             if (pageName === 'experiments') {
                 loadExperiments();
-            } else if (pageName === 'analysis') {
+            } else if (pageName === 'analysis' && !analysisInitialized) {
                 initAnalysisPage();
             }
         });
@@ -59,19 +61,12 @@ function initNavigation() {
 
 function initAnalysisPage() {
     console.log('initAnalysisPage called');
-    const uploadZone = document.getElementById('uploadZone');
-    const fileInput = document.getElementById('fileInput');
-
-    // Remove existing listeners to avoid duplicates (naive approach)
-    const newZone = uploadZone.cloneNode(true);
-    uploadZone.parentNode.replaceChild(newZone, uploadZone);
-
-    // re-get refs
     const zone = document.getElementById('uploadZone');
     const input = document.getElementById('fileInput');
+    const btn = document.getElementById('uploadBtn');
 
-    // Better: Helper wrapper to ensure single init
-    setupUploadListeners(zone, document.getElementById('fileInput'), document.getElementById('uploadBtn'));
+    setupUploadListeners(zone, input, btn);
+    analysisInitialized = true;
 }
 
 function setupUploadListeners(dropZone, input, btn) {
@@ -89,7 +84,11 @@ function setupUploadListeners(dropZone, input, btn) {
     dropZone.onclick = () => input.click();
 
     input.onchange = (e) => {
-        if (e.target.files.length) handleAnalysisImage(e.target.files[0]);
+        if (e.target.files.length) {
+            handleAnalysisImage(e.target.files[0]);
+            // Reset so re-selecting the same file still triggers change
+            input.value = '';
+        }
     };
 
     // Prevent default behaviors for all drag events to stop browser from opening file
@@ -323,18 +322,23 @@ function startInference() {
 
     // Reset client-side skip counter
     skipFrameCounter = 0;
+    isInferring = false;
 
-    // Run inference loop every 100ms (10 FPS)
-    inferenceInterval = setInterval(async () => {
+    // Run inference loop every 100ms (~10 FPS visual refresh)
+    inferenceInterval = setInterval(() => {
+        // Always redraw last known predictions on skipped frames
+        // so bounding boxes persist over the live video
+        drawPredictions(lastPredictions);
+
         skipFrameCounter++;
 
-        if (skipFrameCounter >= skipFrameLimit) {
-            // Time for a real prediction
+        if (skipFrameCounter >= skipFrameLimit && !isInferring) {
+            // Time for a real prediction — guard against overlapping calls
             skipFrameCounter = 0;
-            await runInference(video);
-        } else {
-            // Skipped frame: redraw last known predictions over the live video
-            drawPredictions(lastPredictions);
+            isInferring = true;
+            runInference(video).finally(() => {
+                isInferring = false;
+            });
         }
 
         updateFPS();
