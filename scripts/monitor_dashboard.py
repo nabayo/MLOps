@@ -169,7 +169,7 @@ class Dashboard:
             choice = input_prompt("Action:")
             if choice == "b":
                 break
-            elif choice.startswith("del "):
+            if choice.startswith("del "):
                 exp_id = choice.split(" ")[1]
                 confirm = input_prompt(
                     f"Are you sure you want to delete experiment {exp_id}? (y/n)"
@@ -229,7 +229,7 @@ class Dashboard:
             choice = input_prompt("Action:")
             if choice == "b":
                 break
-            elif choice.startswith("del "):
+            if choice.startswith("del "):
                 run_id = choice.split(" ")[1]
                 try:
                     self.client.delete_run(run_id)
@@ -277,6 +277,9 @@ class Dashboard:
         input("\nPress Enter to go back...")
 
     def force_register_model(self, run_id):
+        """
+        Force register a model from a run.
+        """
         print_sub(f"Force Register Model from Run {run_id}")
         model_name = input_prompt("Enter Model Name (default: YOLOv11-Finger-Counter):")
         if not model_name:
@@ -285,7 +288,7 @@ class Dashboard:
         try:
             self.client.create_registered_model(model_name)
             print_success(f"Created/Ensured Registered Model: {model_name}")
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass  # Already exists
 
         # Default path for this project seems to be 'weights/model.pt' based on force_register.py
@@ -333,7 +336,7 @@ class Dashboard:
             choice = input_prompt("Action:")
             if choice == "b":
                 break
-            elif choice.startswith("del "):
+            if choice.startswith("del "):
                 name = choice.split(" ", 1)[1]
                 confirm = input_prompt(
                     f"DELETE model {name}? This cannot be undone. (y/n)"
@@ -348,12 +351,15 @@ class Dashboard:
             else:
                 input("Invalid action. Press Enter.")
 
-    # --- Metadata Store Explorer ---
     def menu_metadata(self):
+        """
+        Menu for metadata store exploration.
+        """
         if not self.conn:
             print_error("Database connection not available.")
             print(
-                "Ensure POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST are set correctly."
+                "Ensure POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, "
+                "POSTGRES_HOST are set correctly."
             )
             input("Press Enter...")
             return
@@ -375,7 +381,8 @@ class Dashboard:
             if choice == "1":
                 try:
                     cursor.execute(
-                        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = 'public';"
                     )
                     tables = cursor.fetchall()
                     print("\nTables:")
@@ -386,30 +393,14 @@ class Dashboard:
                 input("\nPress Enter...")
 
             elif choice == "2":
-                query = input_prompt("SQL Query >")
-                if query:
-                    try:
-                        cursor.execute(query)
-                        if cursor.description:
-                            cols = [desc[0] for desc in cursor.description]
-                            rows = cursor.fetchall()
-                            if rows:
-                                print(pd.DataFrame(rows, columns=cols).to_string())
-                            else:
-                                print("No results.")
-                        else:
-                            self.conn.commit()
-                            print_success("Query executed.")
-                    except Exception as e:  # pylint: disable=broad-except
-                        self.conn.rollback()
-                        print_error(str(e))
-                    input("\nPress Enter...")
+                self._run_custom_query(cursor)
 
             elif choice == "3":
                 # Example useful query
                 try:
                     cursor.execute(
-                        "SELECT experiment_id, name, lifecycle_stage FROM experiments LIMIT 10;"
+                        "SELECT experiment_id, name, lifecycle_stage "
+                        "FROM experiments LIMIT 10;"
                     )
                     rows = cursor.fetchall()
                     print("\nExperiments (Raw SQL):")
@@ -420,6 +411,27 @@ class Dashboard:
                 input("\nPress Enter...")
 
             cursor.close()
+
+    def _run_custom_query(self, cursor: Any) -> None:
+        """Run a custom SQL query."""
+        query = input_prompt("SQL Query >")
+        if query:
+            try:
+                cursor.execute(query)
+                if cursor.description:
+                    cols = [desc[0] for desc in cursor.description]
+                    rows = cursor.fetchall()
+                    if rows:
+                        print(pd.DataFrame(rows, columns=cols).to_string())
+                    else:
+                        print("No results.")
+                else:
+                    self.conn.commit()
+                    print_success("Query executed.")
+            except Exception as e:  # pylint: disable=broad-except
+                self.conn.rollback()
+                print_error(str(e))
+            input("\nPress Enter...")
 
 
 if __name__ == "__main__":

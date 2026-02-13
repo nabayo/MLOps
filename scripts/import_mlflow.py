@@ -9,7 +9,7 @@ This script imports MLflow data with collision handling:
 - Skips existing artifact files
 """
 
-from typing import Any
+from typing import Any, Dict, Set
 
 import os
 import sys
@@ -26,53 +26,25 @@ from mlflow.tracking import MlflowClient
 from mlflow.entities import RunStatus
 
 
-def import_mlflow_data(
-    zip_path: str, skip_existing: bool = True, dry_run: bool = False
-) -> dict[str, Any]:
+class MLflowImporter:
     """
-    Import MLflow data from a backup zip file.
-
-    Args:
-        zip_path: Path to backup zip file
-        skip_existing: If True, skip existing data (default collision handling)
-        dry_run: If True, only show what would be imported without making changes
-
-    Returns:
-        Dictionary with import statistics
+    Handles the import of MLflow data from a zip archive.
     """
-    zip_file = Path(zip_path)
-    if not zip_file.exists():
-        raise FileNotFoundError(f"Backup file not found: {zip_path}")
 
-    temp_dir = Path(f"temp_import_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    def __init__(
+        self, zip_path: str, skip_existing: bool = True, dry_run: bool = False
+    ):
+        self.zip_file = Path(zip_path)
+        if not self.zip_file.exists():
+            raise FileNotFoundError(f"Backup file not found: {zip_path}")
 
-    try:
-        print("=" * 70)
-        print("🔄 MLflow Data Import")
-        if dry_run:
-            print("🔍 DRY RUN MODE  - No changes will be made")
-        print("=" * 70)
+        self.skip_existing = skip_existing
+        self.dry_run = dry_run
+        self.temp_dir = Path(f"temp_import_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        self.client = MlflowClient()
 
-        # Extract zip
-        print(f"\n📦 Extracting backup: {zip_file.name}")
-        with zipfile.ZipFile(zip_file, "r") as zipf:
-            zipf.extractall(temp_dir)
-
-        # Load metadata
-        with open(temp_dir / "metadata.json", "r", encoding="utf-8") as f:
-            metadata = json.load(f)
-
-        print(f"📅 Backup date: {metadata['export_date']}")
-        print(
-            f"📊 Contains: {metadata['total_experiments']} experiments, "
-            f"{metadata['total_runs']} runs, {metadata['total_models']} models"
-        )
-
-        if dry_run:
-            print("\n🔍 Analyzing backup contents...")
-
-        client = MlflowClient()
-        stats = {
+        # Stats
+        self.stats = {
             "experiments_created": 0,
             "experiments_skipped": 0,
             "runs_created": 0,
@@ -84,50 +56,103 @@ def import_mlflow_data(
             "artifacts_skipped": 0,
         }
 
-        # Get existing experiments and runs
-        existing_experiments = {
-            exp.name: exp for exp in client.search_experiments(view_type=3)
-        }  # ALL
-        existing_runs: set[str] = set()
-        for exp in existing_experiments.values():
-            runs = client.search_runs([exp.experiment_id])
-            existing_runs.update(run.info.run_id for run in runs)
+        # State
+        self.experiment_id_mapping: Dict[str, str] = {}  # old_id -> new_id
+        self.existing_runs: Set[str] = set()
+        self.existing_experiments: Dict[str, Any] = {}
 
-        # Import experiments
+    def import_data(self) -> Dict[str, Any]:
+        """
+        Execute the import process.
+        """
+        try:
+            self._print_header()
+            self._extract_zip()
+            self._load_metadata()
+
+            if self.dry_run:
+                print("\n🔍 Analyzing backup contents...")
+
+            self._load_existing_state()
+            self._import_experiments()
+            self._import_runs()
+            self._import_models()
+            self._print_summary()
+
+            return self.stats
+
+        finally:
+            self._cleanup()
+
+    def _print_header(self) -> None:
+        print("=" * 70)
+        print("🔄 MLflow Data Import")
+        if self.dry_run:
+            print("🔍 DRY RUN MODE  - No changes will be made")
+        print("=" * 70)
+
+    def _extract_zip(self) -> None:
+        print(f"\n📦 Extracting backup: {self.zip_file.name}")
+        with zipfile.ZipFile(self.zip_file, "r") as zipf:
+            zipf.extractall(self.temp_dir)
+
+    def _load_metadata(self) -> None:
+        with open(self.temp_dir / "metadata.json", "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        print(f"📅 Backup date: {metadata['export_date']}")
+        print(
+            f"📊 Contains: {metadata['total_experiments']} experiments, "
+            f"{metadata['total_runs']} runs, {metadata['total_models']} models"
+        )
+
+    def _load_existing_state(self) -> None:
+        """Pre-load existing experiments and runs to check for collisions."""
+        self.existing_experiments = {
+            exp.name: exp for exp in self.client.search_experiments(view_type=3)
+        }  # ALL
+        for exp in self.existing_experiments.values():
+            runs = self.client.search_runs([exp.experiment_id])
+            self.existing_runs.update(run.info.run_id for run in runs)
+
+    def _import_experiments(self) -> None:
+        """Import experiments from the backup."""
         print("\n📦 Importing experiments...")
-        experiments_file = temp_dir / "experiments" / "experiments.json"
+        experiments_file = self.temp_dir / "experiments" / "experiments.json"
         with open(experiments_file, "r", encoding="utf-8") as f:
             experiments_data = json.load(f)
 
-        experiment_id_mapping = {}  # old_id -> new_id
-
         for exp_data in experiments_data:
-            exp_name = exp_data["name"]
+            self._import_single_experiment(exp_data)
 
-            if exp_name in existing_experiments:
-                if skip_existing:
-                    stats["experiments_skipped"] += 1
-                    # Map to existing experiment
-                    experiment_id_mapping[exp_data["experiment_id"]] = (
-                        existing_experiments[exp_name].experiment_id
-                    )
-                    print(f"  ⊘ Skipped (exists): {exp_name}")
-                    continue
+    def _import_single_experiment(self, exp_data: Dict[str, Any]) -> None:
+        exp_name = exp_data["name"]
 
-            if not dry_run:
-                new_exp_id = client.create_experiment(
-                    exp_name, tags=exp_data.get("tags", {})
+        if exp_name in self.existing_experiments:
+            if self.skip_existing:
+                self.stats["experiments_skipped"] += 1
+                # Map to existing experiment
+                self.experiment_id_mapping[exp_data["experiment_id"]] = (
+                    self.existing_experiments[exp_name].experiment_id
                 )
-                experiment_id_mapping[exp_data["experiment_id"]] = new_exp_id
-                print(f"  ✓ Created: {exp_name} (ID: {new_exp_id})")
-            else:
-                print(f"  ✓ Would create: {exp_name}")
+                print(f"  ⊘ Skipped (exists): {exp_name}")
+                return
 
-            stats["experiments_created"] += 1
+        if not self.dry_run:
+            new_exp_id = self.client.create_experiment(
+                exp_name, tags=exp_data.get("tags", {})
+            )
+            self.experiment_id_mapping[exp_data["experiment_id"]] = new_exp_id
+            print(f"  ✓ Created: {exp_name} (ID: {new_exp_id})")
+        else:
+            print(f"  ✓ Would create: {exp_name}")
 
-        # Import runs
+        self.stats["experiments_created"] += 1
+
+    def _import_runs(self) -> None:
+        """Import runs from the backup."""
         print("\n🏃 Importing runs...")
-        runs_dir = temp_dir / "runs"
+        runs_dir = self.temp_dir / "runs"
 
         for run_dir in sorted(runs_dir.iterdir()):
             if not run_dir.is_dir():
@@ -140,202 +165,216 @@ def import_mlflow_data(
             with open(run_file, "r", encoding="utf-8") as f:
                 run_data = json.load(f)
 
-            run_id = run_data["info"]["run_id"]
-            run_name = run_data["info"].get("run_name", run_id[:8])
+            self._import_single_run(run_data, run_dir)
 
-            if run_id in existing_runs:
-                if skip_existing:
-                    stats["runs_skipped"] += 1
-                    print(f"  ⊘ Skipped (exists): {run_name}")
-                    continue
+    def _import_single_run(self, run_data: Dict[str, Any], run_dir: Path) -> None:
+        run_id = run_data["info"]["run_id"]
+        run_name = run_data["info"].get("run_name", run_id[:8])
 
-            if not dry_run:
-                # Get mapped experiment ID
-                old_exp_id = run_data["info"]["experiment_id"]
-                new_exp_id = experiment_id_mapping.get(old_exp_id)
+        if run_id in self.existing_runs and self.skip_existing:
+            self.stats["runs_skipped"] += 1
+            print(f"  ⊘ Skipped (exists): {run_name}")
+            return
 
-                if new_exp_id is None:
-                    print(
-                        f"  ⚠ Warning: Experiment not found for run {run_name}, skipping"
+        if self.dry_run:
+            self._dry_run_import_run(run_name, run_dir)
+            self.stats["runs_created"] += 1
+            return
+
+        # Start actual import
+        old_exp_id = run_data["info"]["experiment_id"]
+        new_exp_id = self.experiment_id_mapping.get(old_exp_id)
+
+        if new_exp_id is None:
+            print(f"  ⚠ Warning: Experiment not found for run {run_name}, skipping")
+            self.stats["runs_skipped"] += 1
+            return
+
+        # Create run
+        run = self.client.create_run(
+            experiment_id=new_exp_id,
+            run_name=run_name,
+            tags=run_data["data"].get("tags", {}),
+        )
+
+        # Log parameters and metrics
+        self._log_run_data(run.info.run_id, run_data)
+
+        # Upload artifacts
+        self._upload_artifacts(run.info.run_id, run_dir)
+
+        # End run
+        end_status = RunStatus.to_string(RunStatus.FINISHED)
+        self.client.set_terminated(run.info.run_id, end_status)
+
+        print(
+            f"  ✓ Created: {run_name} ({self.stats.get('artifacts_uploaded_last_run', 0)} artifacts)"
+        )
+        self.stats["runs_created"] += 1
+
+    def _dry_run_import_run(self, run_name: str, run_dir: Path) -> None:
+        artifacts_dir = run_dir / "artifacts"
+        artifact_count = 0
+        if artifacts_dir.exists():
+            artifact_count = sum(1 for _ in artifacts_dir.rglob("*") if _.is_file())
+        print(f"  ✓ Would create: {run_name} ({artifact_count} artifacts)")
+
+    def _log_run_data(self, run_id: str, run_data: Dict[str, Any]) -> None:
+        for key, value in run_data["data"].get("params", {}).items():
+            self.client.log_param(run_id, key, value)
+
+        for key, value in run_data["data"].get("metrics", {}).items():
+            self.client.log_metric(run_id, key, value)
+
+    def _upload_artifacts(self, run_id: str, run_dir: Path) -> None:
+        artifacts_dir = run_dir / "artifacts"
+        uploaded_count = 0
+        if artifacts_dir.exists():
+            for root, _dirs, files in os.walk(artifacts_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    rel_path = file_path.relative_to(artifacts_dir)
+                    artifact_path = (
+                        str(rel_path.parent) if rel_path.parent != Path(".") else ""
                     )
-                    stats["runs_skipped"] += 1
-                    continue
 
-                # Create run
-                run = client.create_run(
-                    experiment_id=new_exp_id,
-                    run_name=run_name,
-                    tags=run_data["data"].get("tags", {}),
-                )
+                    try:
+                        self.client.log_artifact(run_id, str(file_path), artifact_path)
+                        self.stats["artifacts_uploaded"] += 1
+                        uploaded_count += 1
+                    except Exception as e:  # pylint: disable=broad-except
+                        print(f"    ⚠ Warning: Could not upload {rel_path}: {e}")
+                        self.stats["artifacts_skipped"] += 1
+        self.stats["artifacts_uploaded_last_run"] = uploaded_count
 
-                # Log parameters
-                for key, value in run_data["data"].get("params", {}).items():
-                    client.log_param(run.info.run_id, key, value)
-
-                # Log metrics
-                for key, value in run_data["data"].get("metrics", {}).items():
-                    client.log_metric(run.info.run_id, key, value)
-
-                # Upload artifacts
-                artifacts_dir = run_dir / "artifacts"
-                if artifacts_dir.exists():
-                    for root, _dirs, files in os.walk(artifacts_dir):
-                        for file in files:
-                            file_path = Path(root) / file
-                            rel_path = file_path.relative_to(artifacts_dir)
-
-                            # Check if artifact directory exists
-                            artifact_path = (
-                                str(rel_path.parent)
-                                if rel_path.parent != Path(".")
-                                else ""
-                            )
-
-                            try:
-                                client.log_artifact(
-                                    run.info.run_id, str(file_path), artifact_path
-                                )
-                                stats["artifacts_uploaded"] += 1
-                            except Exception as e:  # pylint: disable=broad-except
-                                print(
-                                    f"    ⚠ Warning: Could not upload {rel_path}: {e}"
-                                )
-                                stats["artifacts_skipped"] += 1
-
-                # End run with appropriate status
-                end_status = RunStatus.to_string(RunStatus.FINISHED)
-                client.set_terminated(run.info.run_id, end_status)
-
-                print(
-                    f"  ✓ Created: {run_name} ({stats['artifacts_uploaded']} artifacts)"
-                )
-            else:
-                # Count artifacts in dry run
-                artifacts_dir = run_dir / "artifacts"
-                if artifacts_dir.exists():
-                    artifact_count = sum(
-                        1 for _ in artifacts_dir.rglob("*") if _.is_file()
-                    )
-                    print(f"  ✓ Would create: {run_name} ({artifact_count} artifacts)")
-
-            stats["runs_created"] += 1
-
-        # Import registered models
+    def _import_models(self) -> None:
+        """Import registered models."""
         print("\n🎯 Importing registered models...")
-        models_file = temp_dir / "models" / "models.json"
+        models_file = self.temp_dir / "models" / "models.json"
 
-        if models_file.exists():
-            with open(models_file, "r", encoding="utf-8") as f:
-                models_data = json.load(f)
+        if not models_file.exists():
+            return
 
-            # Get existing models
-            existing_models = {
-                model.name: model for model in client.search_registered_models()
-            }
+        with open(models_file, "r", encoding="utf-8") as f:
+            models_data = json.load(f)
 
-            for model_data in models_data:
-                model_name = model_data["name"]
+        existing_models = {
+            model.name: model for model in self.client.search_registered_models()
+        }
 
-                # Create or get model
-                if model_name in existing_models:
-                    if skip_existing:
-                        print(f"  ⊘ Model exists: {model_name}")
-                        _model = existing_models[model_name]
-                    else:
-                        if dry_run:
-                            print(f"  ✓ Model exists: {model_name}")
-                        _model = existing_models[model_name]
-                else:
-                    if not dry_run:
-                        client.create_registered_model(
-                            model_name,
-                            tags=model_data.get("tags", {}),
-                            description=model_data.get("description"),
-                        )
-                        print(f"  ✓ Created model: {model_name}")
-                    else:
-                        print(f"  ✓ Would create model: {model_name}")
-                    stats["models_created"] += 1
+        for model_data in models_data:
+            self._import_single_model(model_data, existing_models)
 
-                # Import versions
-                existing_versions = set()
-                if model_name in existing_models and not dry_run:
-                    versions = client.search_model_versions(f"name='{model_name}'")
-                    existing_versions = {v.version for v in versions}
+    def _import_single_model(
+        self, model_data: Dict[str, Any], existing_models: Dict[str, Any]
+    ) -> None:
+        model_name = model_data["name"]
 
-                for version_data in model_data.get("versions", []):
-                    version = version_data["version"]
-                    run_id = version_data.get("run_id")
+        # Create or get model
+        if model_name in existing_models:
+            if self.skip_existing:
+                print(f"  ⊘ Model exists: {model_name}")
+            else:
+                if self.dry_run:
+                    print(f"  ✓ Model exists: {model_name}")
+        else:
+            if not self.dry_run:
+                self.client.create_registered_model(
+                    model_name,
+                    tags=model_data.get("tags", {}),
+                    description=model_data.get("description"),
+                )
+                print(f"  ✓ Created model: {model_name}")
+            else:
+                print(f"  ✓ Would create model: {model_name}")
+            self.stats["models_created"] += 1
 
-                    if version in existing_versions:
-                        if skip_existing:
-                            stats["model_versions_skipped"] += 1
-                            print(f"    ⊘ Version {version} exists")
-                            continue
+        self._import_model_versions(model_name, model_data, existing_models)
 
-                    if not dry_run and run_id:
-                        try:
-                            # Note: This requires the run to exist
-                            mv = client.create_model_version(
-                                model_name,
-                                f"runs:/{run_id}/model",
-                                run_id=run_id,
-                                tags=version_data.get("tags", {}),
-                                description=version_data.get("description"),
-                            )
+    def _import_model_versions(
+        self,
+        model_name: str,
+        model_data: Dict[str, Any],
+        existing_models: Dict[str, Any],
+    ) -> None:
+        existing_versions = set()
+        if model_name in existing_models and not self.dry_run:
+            versions = self.client.search_model_versions(f"name='{model_name}'")
+            existing_versions = {v.version for v in versions}
 
-                            # Set stage if not None
-                            current_stage = version_data.get("current_stage")
-                            if current_stage and current_stage != "None":
-                                client.transition_model_version_stage(
-                                    model_name, mv.version, current_stage
-                                )
+        for version_data in model_data.get("versions", []):
+            version = version_data["version"]
+            run_id = version_data.get("run_id")
 
-                            print(f"    ✓ Created version {mv.version}")
-                            stats["model_versions_created"] += 1
-                        except Exception as e:  # pylint: disable=broad-except
-                            print(
-                                f"    ⚠ Warning: Could not create version {version}: {e}"
-                            )
-                            stats["model_versions_skipped"] += 1
-                    else:
-                        print(f"    ✓ Would create version {version}")
-                        stats["model_versions_created"] += 1
+            if version in existing_versions and self.skip_existing:
+                self.stats["model_versions_skipped"] += 1
+                print(f"    ⊘ Version {version} exists")
+                continue
 
-        # Print summary
+            if not self.dry_run and run_id:
+                self._create_model_version(model_name, version_data, run_id)
+            else:
+                print(f"    ✓ Would create version {version}")
+                self.stats["model_versions_created"] += 1
+
+    def _create_model_version(
+        self, model_name: str, version_data: Dict[str, Any], run_id: str
+    ) -> None:
+        try:
+            mv = self.client.create_model_version(
+                model_name,
+                f"runs:/{run_id}/model",
+                run_id=run_id,
+                tags=version_data.get("tags", {}),
+                description=version_data.get("description"),
+            )
+
+            current_stage = version_data.get("current_stage")
+            if current_stage and current_stage != "None":
+                self.client.transition_model_version_stage(
+                    model_name, mv.version, current_stage
+                )
+
+            print(f"    ✓ Created version {mv.version}")
+            self.stats["model_versions_created"] += 1
+        except Exception as e:  # pylint: disable=broad-except
+            print(
+                f"    ⚠ Warning: Could not create version {version_data['version']}: {e}"
+            )
+            self.stats["model_versions_skipped"] += 1
+
+    def _print_summary(self) -> None:
         print("\n" + "=" * 70)
-        if dry_run:
+        if self.dry_run:
             print("🔍 Dry Run Summary (No changes made)")
         else:
             print("✅ Import Complete!")
         print("=" * 70)
         print(
-            f"📦 Experiments: {stats['experiments_created']} created,\
-                {stats['experiments_skipped']} skipped"
+            f"📦 Experiments: {self.stats['experiments_created']} created, "
+            f"{self.stats['experiments_skipped']} skipped"
         )
         print(
-            f"🏃 Runs: {stats['runs_created']} created,\
-                {stats['runs_skipped']} skipped"
+            f"🏃 Runs: {self.stats['runs_created']} created, "
+            f"{self.stats['runs_skipped']} skipped"
         )
-        print(f"🎯 Models: {stats['models_created']} created")
+        print(f"🎯 Models: {self.stats['models_created']} created")
         print(
-            f"📦 Model Versions: {stats['model_versions_created']} created,\
-                {stats['model_versions_skipped']} skipped"
+            f"📦 Model Versions: {self.stats['model_versions_created']} created, "
+            f"{self.stats['model_versions_skipped']} skipped"
         )
         print(
-            f"📁 Artifacts: {stats['artifacts_uploaded']} uploaded,\
-                {stats['artifacts_skipped']} skipped"
+            f"📁 Artifacts: {self.stats['artifacts_uploaded']} uploaded, "
+            f"{self.stats['artifacts_skipped']} skipped"
         )
 
-        return stats
-
-    finally:
-        # Cleanup temp directory
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
+    def _cleanup(self) -> None:
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -363,12 +402,15 @@ if __name__ == "__main__":
         mlflow.set_tracking_uri(args.tracking_uri)
 
     try:
-        _stats = import_mlflow_data(
+        MLflowImporter(
             args.backup_file, skip_existing=not args.overwrite, dry_run=args.dry_run
-        )
+        ).import_data()
         sys.exit(0)
     except Exception as e:  # pylint: disable=broad-except
         print(f"\n❌ Import failed: {e}", file=sys.stderr)
-
         traceback.print_exc()
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

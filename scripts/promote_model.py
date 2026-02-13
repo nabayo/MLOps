@@ -1,10 +1,18 @@
+"""
+Promote a specific model version to Production stage in MLflow.
+"""
+
 import os
 
 import mlflow
 from mlflow.tracking import MlflowClient
 
 
-def promote_to_production():
+def promote_to_production() -> None:
+    """
+    Promote the YOLOv11-Finger-Counter model to Production.
+    Currently hardcoded to version 1.
+    """
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()

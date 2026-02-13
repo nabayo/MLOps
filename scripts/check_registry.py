@@ -8,6 +8,44 @@ import mlflow
 from mlflow.tracking import MlflowClient
 
 
+def _inspect_artifacts(client: MlflowClient, file_handle) -> None:
+    """
+    Inspect artifacts for all runs and write to file handle.
+    """
+    try:
+        file_handle.write("\n=== Artifact Inspection (All Runs) ===\n")
+        experiments = client.search_experiments()
+        for exp in experiments:
+            file_handle.write(f"\nExperiment: {exp.name} (ID: {exp.experiment_id})\n")
+            runs = client.search_runs(exp.experiment_id)
+            if runs:
+                for run in runs[:5]:  # Inspect top 5 runs
+                    file_handle.write(
+                        f"  Run: {run.info.run_id} ({run.info.run_name})\n"
+                    )
+                    file_handle.write(f"    Artifact URI: {run.info.artifact_uri}\n")
+                    try:
+                        artifacts = client.list_artifacts(run.info.run_id)
+                        if artifacts:
+                            file_handle.write("    Artifacts:\n")
+                            for art in artifacts:
+                                file_handle.write(f"      - {art.path}\n")
+                                if art.path == "weights" and art.is_dir:
+                                    sub = client.list_artifacts(
+                                        run.info.run_id, "weights"
+                                    )
+                                    for s in sub:
+                                        file_handle.write(f"        - {s.path}\n")
+                        else:
+                            file_handle.write("    (No artifacts found)\n")
+                    except Exception as e:  # pylint: disable=broad-except
+                        file_handle.write(f"    Error listing artifacts: {e}\n")
+            else:
+                file_handle.write("  No runs found.\n")
+    except Exception as e:  # pylint: disable=broad-except
+        file_handle.write(f"Error inspecting artifacts: {e}\n")
+
+
 def check_registry() -> None:
     """
     Check MLflow registry for registered models.
@@ -41,38 +79,8 @@ def check_registry() -> None:
             if len(models) == 0:
                 f.write("\nRegistry is empty (via search).\n")
 
-            # DEBUG: Check artifacts for the all run
-            #        to see why registration might be failing
-            try:
-                f.write("\n=== Artifact Inspection (All Runs) ===\n")
-                experiments = client.search_experiments()
-                for exp in experiments:
-                    f.write(f"\nExperiment: {exp.name} (ID: {exp.experiment_id})\n")
-                    runs = client.search_runs(exp.experiment_id)
-                    if runs:
-                        for run in runs[:5]:  # Inspect top 5 runs
-                            f.write(f"  Run: {run.info.run_id} ({run.info.run_name})\n")
-                            f.write(f"    Artifact URI: {run.info.artifact_uri}\n")
-                            try:
-                                artifacts = client.list_artifacts(run.info.run_id)
-                                if artifacts:
-                                    f.write("    Artifacts:\n")
-                                    for art in artifacts:
-                                        f.write(f"      - {art.path}\n")
-                                        if art.path == "weights" and art.is_dir:
-                                            sub = client.list_artifacts(
-                                                run.info.run_id, "weights"
-                                            )
-                                            for s in sub:
-                                                f.write(f"        - {s.path}\n")
-                                else:
-                                    f.write("    (No artifacts found)\n")
-                            except Exception as e:  # pylint: disable=broad-except
-                                f.write(f"    Error listing artifacts: {e}\n")
-                    else:
-                        f.write("  No runs found.\n")
-            except Exception as e:  # pylint: disable=broad-except
-                f.write(f"Error inspecting artifacts: {e}\n")
+            # DEBUG: Check artifacts
+            _inspect_artifacts(client, f)
 
         except Exception as e:  # pylint: disable=broad-except
             f.write(f"\nError searching models: {e}\n")

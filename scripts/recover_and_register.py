@@ -1,12 +1,19 @@
+"""
+Script to recover a model checkpoint from MinIO and register it in MLflow.
+"""
+
 import os
+import traceback
+import tempfile
 import boto3
 import mlflow
-import tempfile
-
 from ultralytics import YOLO
 
 
-def recover_and_register():
+def recover_and_register() -> None:
+    """
+    Recover the best or last model checkpoint from MinIO and register it.
+    """
     # MinIO config
     endpoint = os.environ.get("MLFLOW_S3_ENDPOINT_URL", "http://minio:9000")
     key = os.environ.get("AWS_ACCESS_KEY_ID")
@@ -45,46 +52,49 @@ def recover_and_register():
                 print("  ⬇ Downloading...")
                 s3.download_file(bucket_name, key_path, local_path)
 
-                try:
-                    # Parse run ID from key for naming
-                    parts = key_path.split("/")
-                    if len(parts) >= 2:
-                        run_id_origin = parts[1]
-                    else:
-                        run_id_origin = "unknown"
+                _process_checkpoint(local_path, key_path)
 
-                    print("  🔄 Loading model with YOLO...")
-                    _model = YOLO(local_path)
 
-                    model_name = "YOLOv11-Finger-Counter"
-                    run_name = f"recovered_{run_id_origin}"
+def _process_checkpoint(local_path: str, key_path: str) -> None:
+    """
+    Load validation logic and register model.
+    """
+    try:
+        # Parse run ID from key for naming
+        parts = key_path.split("/")
+        if len(parts) >= 2:
+            run_id_origin = parts[1]
+        else:
+            run_id_origin = "unknown"
 
-                    print(f"  ⬆ Logging and registering to '{model_name}'...")
-                    with mlflow.start_run(run_name=run_name) as run:
-                        mlflow.log_param("original_s3_key", key_path)
-                        mlflow.log_param("recovery_source", "minio_direct")
+        print("  🔄 Loading model with YOLO...")
+        _model = YOLO(local_path)
 
-                        # Log as artifact
-                        mlflow.log_artifact(local_path, "weights")
-                        print("    ✅ Artifact logged.")
+        model_name = "YOLOv11-Finger-Counter"
+        run_name = f"recovered_{run_id_origin}"
 
-                        try:
-                            # Register model using run artifact URI
-                            model_uri = f"runs:/{run.info.run_id}/weights/model.pt"
-                            print(
-                                f"    ✨ Registering {model_uri} to '{model_name}'..."
-                            )
+        print(f"  ⬆ Logging and registering to '{model_name}'...")
+        with mlflow.start_run(run_name=run_name) as run:
+            mlflow.log_param("original_s3_key", key_path)
+            mlflow.log_param("recovery_source", "minio_direct")
 
-                            mlflow.register_model(model_uri, model_name)
-                            print("    ✅ Registration API called successfully.")
-                        except Exception as reg_error:
-                            print(f"    ❌ Registration failed: {reg_error}")
+            # Log as artifact
+            mlflow.log_artifact(local_path, "weights")
+            print("    ✅ Artifact logged.")
 
-                except Exception as e:  # pylint: disable=broad-except
-                    print(f"  ❌ Error loading/registering: {e}")
-                    import traceback
+            try:
+                # Register model using run artifact URI
+                model_uri = f"runs:/{run.info.run_id}/weights/model.pt"
+                print(f"    ✨ Registering {model_uri} to '{model_name}'...")
 
-                    traceback.print_exc()
+                mlflow.register_model(model_uri, model_name)
+                print("    ✅ Registration API called successfully.")
+            except Exception as reg_error:  # pylint: disable=broad-except
+                print(f"    ❌ Registration failed: {reg_error}")
+
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"  ❌ Error loading/registering: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

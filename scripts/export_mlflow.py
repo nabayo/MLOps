@@ -9,6 +9,8 @@ This script exports:
 - Run artifacts
 """
 
+from typing import Optional, Any
+
 import os
 import sys
 import json
@@ -23,52 +25,83 @@ import mlflow
 from mlflow.tracking import MlflowClient
 
 
-def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> str:
+class MLflowExporter:
     """
-    Export all MLflow data to a zip file.
-
-    Args:
-        output_dir: Directory to save the backup zip
-        backup_name: Custom backup name (default: mlflow_backup_YYYYMMDD_HHMMSS.zip)
-
-    Returns:
-        Path to created zip file
+    Handles the export of MLflow data to a zip archive.
     """
-    # Create output directory
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
 
-    # Generate backup name
-    if backup_name is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_name = f"mlflow_backup_{timestamp}.zip"
+    def __init__(self, output_dir: str, backup_name: Optional[str] = None):
+        self.output_path = Path(output_dir)
+        self.output_path.mkdir(parents=True, exist_ok=True)
 
-    if not backup_name.endswith(".zip"):
-        backup_name += ".zip"
+        # Generate backup name
+        if backup_name is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.backup_name = f"mlflow_backup_{timestamp}.zip"
+        else:
+            self.backup_name = backup_name
 
-    zip_path = output_path / backup_name
-    temp_dir = output_path / f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    temp_dir.mkdir(parents=True, exist_ok=True)
+        if not self.backup_name.endswith(".zip"):
+            self.backup_name += ".zip"
 
-    try:
-        print("=" * 70)
-        print("🔄 MLflow Data Export")
-        print("=" * 70)
+        self.zip_path = self.output_path / self.backup_name
+        self.temp_dir = (
+            self.output_path / f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
-        client = MlflowClient()
+        self.client = MlflowClient()
 
-        # Create backup structure
-        experiments_dir = temp_dir / "experiments"
-        runs_dir = temp_dir / "runs"
-        models_dir = temp_dir / "models"
-        experiments_dir.mkdir()
-        runs_dir.mkdir()
-        models_dir.mkdir()
+        # Directories
+        self.experiments_dir = self.temp_dir / "experiments"
+        self.runs_dir = self.temp_dir / "runs"
+        self.models_dir = self.temp_dir / "models"
 
-        # Export experiments
+        self.experiments_dir.mkdir()
+        self.runs_dir.mkdir()
+        self.models_dir.mkdir()
+
+        # Stats
+        self.data_experiments: list[dict[str, Any]] = []
+        self.data_models: list[dict[str, Any]] = []
+        self.total_runs = 0
+
+    def export(self) -> str:
+        """
+        Execute the export process.
+        """
+        try:
+            print("=" * 70)
+            print("🔄 MLflow Data Export")
+            print("=" * 70)
+
+            self._export_experiments()
+            self._export_runs()
+            self._export_models()
+            self._write_metadata()
+            self._create_zip()
+
+            file_size_mb = self.zip_path.stat().st_size / (1024 * 1024)
+
+            print("\n" + "=" * 70)
+            print("✅ Export Complete!")
+            print("=" * 70)
+            print(f"📁 Backup file: {self.zip_path}")
+            print(f"📊 Size: {file_size_mb:.2f} MB")
+            print(f"📦 Experiments: {len(self.data_experiments)}")
+            print(f"🏃 Runs: {self.total_runs}")
+            print(f"🎯 Models: {len(self.data_models)}")
+
+            return str(self.zip_path)
+
+        finally:
+            self._cleanup()
+
+    def _export_experiments(self) -> None:
+        """Export experiments metadata."""
         print("\n📦 Exporting experiments...")
-        experiments = client.search_experiments()
-        experiments_data = []
+        experiments = self.client.search_experiments()
+        self.data_experiments = []
 
         for exp in experiments:
             exp_data = {
@@ -78,73 +111,84 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                 "lifecycle_stage": exp.lifecycle_stage,
                 "tags": exp.tags,
             }
-            experiments_data.append(exp_data)
+            self.data_experiments.append(exp_data)
             print(f"  ✓ Experiment: {exp.name} (ID: {exp.experiment_id})")
 
-        with open(experiments_dir / "experiments.json", "w", encoding="utf-8") as f:
-            json.dump(experiments_data, f, indent=2)
+        with open(
+            self.experiments_dir / "experiments.json", "w", encoding="utf-8"
+        ) as f:
+            json.dump(self.data_experiments, f, indent=2)
 
-        # Export runs
+    def _export_runs(self) -> None:
+        """Export runs for all experiments."""
         print("\n🏃 Exporting runs...")
-        total_runs = 0
+        self.total_runs = 0
 
-        for exp in experiments:
-            runs = client.search_runs(experiment_ids=[exp.experiment_id])
+        # Create explicit list of IDs to avoid issues if experiments list changes
+        experiment_ids = [exp["experiment_id"] for exp in self.data_experiments]
+
+        for exp_id in experiment_ids:
+            runs = self.client.search_runs(experiment_ids=[exp_id])
 
             for run in runs:
-                total_runs += 1
-                run_dir = runs_dir / run.info.run_id
-                run_dir.mkdir(parents=True, exist_ok=True)
-
-                # Export run metadata
-                run_data = {
-                    "info": {
-                        "run_id": run.info.run_id,
-                        "experiment_id": run.info.experiment_id,
-                        "run_name": run.info.run_name,
-                        "status": run.info.status,
-                        "start_time": run.info.start_time,
-                        "end_time": run.info.end_time,
-                        "artifact_uri": run.info.artifact_uri,
-                    },
-                    "data": {
-                        "params": run.data.params,
-                        "metrics": run.data.metrics,
-                        "tags": run.data.tags,
-                    },
-                }
-
-                with open(run_dir / "run.json", "w", encoding="utf-8") as f:
-                    json.dump(run_data, f, indent=2)
-
-                # Export artifacts
-                try:
-                    artifacts_dir = run_dir / "artifacts"
-                    artifacts_dir.mkdir(exist_ok=True)
-
-                    # Download all artifacts for this run
-                    _local_artifact_path = client.download_artifacts(
-                        run.info.run_id, "", dst_path=str(artifacts_dir)
-                    )
-
-                except Exception as e:  # pylint: disable=broad-except
-                    print(
-                        f"    ⚠ Warning:\
-                             Could not download artifacts for run {run.info.run_id}: {e}"
-                    )
-
+                self.total_runs += 1
+                self._export_single_run(run)
                 print(f"  ✓ Run: {run.info.run_name or run.info.run_id[:8]}")
 
-        print(f"\n  Total runs exported: {total_runs}")
+        print(f"\n  Total runs exported: {self.total_runs}")
 
-        # Export registered models
+    def _export_single_run(self, run: Any) -> None:
+        """Export a single run's metadata and artifacts."""
+        run_dir = self.runs_dir / run.info.run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Export run metadata
+        run_data = {
+            "info": {
+                "run_id": run.info.run_id,
+                "experiment_id": run.info.experiment_id,
+                "run_name": run.info.run_name,
+                "status": run.info.status,
+                "start_time": run.info.start_time,
+                "end_time": run.info.end_time,
+                "artifact_uri": run.info.artifact_uri,
+            },
+            "data": {
+                "params": run.data.params,
+                "metrics": run.data.metrics,
+                "tags": run.data.tags,
+            },
+        }
+
+        with open(run_dir / "run.json", "w", encoding="utf-8") as f:
+            json.dump(run_data, f, indent=2)
+
+        # Export artifacts
+        try:
+            artifacts_dir = run_dir / "artifacts"
+            artifacts_dir.mkdir(exist_ok=True)
+
+            # Download all artifacts for this run
+            self.client.download_artifacts(
+                run.info.run_id, "", dst_path=str(artifacts_dir)
+            )
+
+        except Exception as e:  # pylint: disable=broad-except
+            print(
+                f"    ⚠ Warning: Could not download artifacts for run {run.info.run_id}: {e}"
+            )
+
+    def _export_models(self) -> None:
+        """Export registered models and their versions."""
         print("\n🎯 Exporting registered models...")
         try:
-            models = client.search_registered_models()
-            models_data = []
+            models = self.client.search_registered_models()
+            self.data_models = []
 
             for model in models:
-                model_versions = client.search_model_versions(f"name='{model.name}'")
+                model_versions = self.client.search_model_versions(
+                    f"name='{model.name}'"
+                )
 
                 model_data = {
                     "name": model.name,
@@ -168,56 +212,46 @@ def export_mlflow_data(output_dir: str = "backups", backup_name: str = None) -> 
                     }
                     model_data["versions"].append(version_data)
 
-                models_data.append(model_data)
+                self.data_models.append(model_data)
                 print(f"  ✓ Model: {model.name} ({len(model_versions)} versions)")
 
-            with open(models_dir / "models.json", "w", encoding="utf-8") as f:
-                json.dump(models_data, f, indent=2)
+            with open(self.models_dir / "models.json", "w", encoding="utf-8") as f:
+                json.dump(self.data_models, f, indent=2)
 
         except Exception as e:  # pylint: disable=broad-except
             print(f"  ⚠ Warning: Could not export models: {e}")
 
-        # Create metadata file
+    def _write_metadata(self) -> None:
+        """Write export metadata."""
         metadata = {
             "export_date": datetime.now().isoformat(),
             "mlflow_tracking_uri": mlflow.get_tracking_uri(),
-            "total_experiments": len(experiments_data),
-            "total_runs": total_runs,
-            "total_models": len(models_data) if "models_data" in locals() else 0,
+            "total_experiments": len(self.data_experiments),
+            "total_runs": self.total_runs,
+            "total_models": len(self.data_models),
         }
 
-        with open(temp_dir / "metadata.json", "w", encoding="utf-8") as f:
+        with open(self.temp_dir / "metadata.json", "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
-        # Create zip file
-        print(f"\n📦 Creating backup archive: {zip_path.name}")
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, _dirs, files in os.walk(temp_dir):
+    def _create_zip(self) -> None:
+        """Compress the temporary directory into a zip file."""
+        print(f"\n📦 Creating backup archive: {self.zip_path.name}")
+        with zipfile.ZipFile(self.zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, _dirs, files in os.walk(self.temp_dir):
                 for file in files:
                     file_path = Path(root) / file
-                    arcname = file_path.relative_to(temp_dir)
+                    arcname = file_path.relative_to(self.temp_dir)
                     zipf.write(file_path, arcname)
 
-        file_size_mb = zip_path.stat().st_size / (1024 * 1024)
-
-        print("\n" + "=" * 70)
-        print("✅ Export Complete!")
-        print("=" * 70)
-        print(f"📁 Backup file: {zip_path}")
-        print(f"📊 Size: {file_size_mb:.2f} MB")
-        print(f"📦 Experiments: {metadata['total_experiments']}")
-        print(f"🏃 Runs: {metadata['total_runs']}")
-        print(f"🎯 Models: {metadata['total_models']}")
-
-        return str(zip_path)
-
-    finally:
-        # Cleanup temp directory
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
+    def _cleanup(self) -> None:
+        """Remove temporary directories."""
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -238,10 +272,14 @@ if __name__ == "__main__":
         mlflow.set_tracking_uri(args.tracking_uri)
 
     try:
-        backup_path = export_mlflow_data(args.output_dir, args.name)
+        exporter = MLflowExporter(args.output_dir, args.name)
+        exporter.export()
         sys.exit(0)
     except Exception as e:  # pylint: disable=broad-except
         print(f"\n❌ Export failed: {e}", file=sys.stderr)
-
         traceback.print_exc()
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
