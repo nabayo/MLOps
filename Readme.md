@@ -34,7 +34,27 @@ The system is composed of the following services:
     ```
     **If you want to start training:** Ensure there is a file in the root directory named `picsellia_token` containing your valid API token.
 
-3.  **Start Services:**
+
+3. **Import backup**:
+
+    To import all the models weights and artifacts from a training session, there is a backup import/export system where you can export your training session into a backup zip file (e.g., `mlflow_backup_20260206_152906.zip`) that you can import back into another system:
+
+    1.  **Place the backup file** into the `backups/` directory in the project root. Create that folder if it doesn't exist.
+    2.  Run the import script with the filename.
+
+    **Linux/MacOS**
+    ```bash
+    ./scripts/import_backup.sh mlflow_backup_20260206_152906.zip
+    ```
+    *(Note: You can provide just the filename or the path `backups/filename.zip`, but the file MUST be inside the `backups/` folder).*
+
+    **Windows**
+    ```powershell
+    ./scripts/import_backup.ps1 mlflow_backup_20260206_152906.zip
+    ```
+
+4. **Start the web app**:
+
     Launch the full stack using Docker Compose.
     ```bash
     docker-compose up -d
@@ -109,6 +129,30 @@ The backend API is available at `http://localhost:8000`.
 -   `websocket /ws/predict`: Real-time inference stream.
 
 Interactive documentation is available at `http://localhost:8000/docs`.
+
+## Backup Export after training
+
+To save your current experiments and models:
+
+**Linux/MacOS**
+```bash
+# Auto-generated name
+./scripts/export_backup.sh
+
+# Custom name
+./scripts/export_backup.sh --name my_custom_backup
+```
+
+**Windows**
+```powershell
+# Auto-generated name
+./scripts/export_backup.ps1
+
+# Custom name
+./scripts/export_backup.ps1 my_custom_backup
+```
+
+The backup zip file will be created in the `backups/` directory.
 
 ## Project Structure
 
