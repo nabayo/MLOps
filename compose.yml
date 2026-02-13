@@ -201,6 +201,9 @@ services:
     container_name: mlops-frontend
     depends_on:
       - serving
+    environment:
+      FRONTEND_COM: ${FRONTEND_COM:-HTTP}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     ports:
       - "8080:80"
     networks:

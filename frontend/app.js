@@ -9,8 +9,7 @@
 
 console.log('APP.JS LOADED - VERSION 3 - WITH DETAILED LOGGING', 'background: #222; color: #bada55; font-size: 16px; font-weight: bold;');
 
-// Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// Configuration — API_BASE_URL is now provided by comms.js / config.js
 
 // Global state
 let webcamStream = null;
@@ -24,6 +23,7 @@ let skipFrameCounter = 0;
 let skipFrameLimit = 6;
 let isInferring = false;
 let analysisInitialized = false;
+let confThreshold = 0.15;
 
 // ============================================================================
 // Page Navigation
@@ -133,20 +133,9 @@ async function handleAnalysisImage(file) {
         // Show results container
         document.getElementById('analysisResults').style.display = 'grid';
 
-        // Preview Original (Optional, we will draw result directly)
-
-        // Send to API
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_BASE_URL}/predict?skip_check=false`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) throw new Error('Analysis failed');
-
-        const data = await response.json();
+        // Send to API via transport
+        const transport = getTransport();
+        const data = await transport.analyzeImage(file);
 
         // Display Result
         displayAnalysisResult(data, file);
@@ -347,81 +336,24 @@ function startInference() {
 
 async function runInference(video) {
     const startTime = performance.now();
-    console.log('🎬 [INFERENCE] Starting inference...');
 
     try {
         // Capture frame from video
-        console.log('📷 [INFERENCE] Capturing frame from video...');
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0);
-        console.log(`📷 [INFERENCE] Frame captured: ${canvas.width}x${canvas.height}`);
 
         // Convert to blob
-        console.log('🔄 [INFERENCE] Converting to blob...');
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-        console.log(`🔄 [INFERENCE] Blob created: ${blob.size} bytes`);
 
-        // Send to API
-        console.log('📡 [INFERENCE] Sending to API...');
-        const formData = new FormData();
-        formData.append('file', blob, 'frame.jpg');
+        // Send to API via transport
+        const transport = getTransport();
+        const data = await transport.predict(blob, confThreshold);
 
-        const response = await fetch(`${API_BASE_URL}/predict?skip_check=false`, {
-            method: 'POST',
-            body: formData
-        });
-
-        console.log(`📡 [INFERENCE] Response status: ${response.status}`);
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('📦 [INFERENCE] Response data:', {
-            finger_count: data.finger_count,
-            predictions: data.predictions?.length || 0,
-            preprocessing_applied: data.preprocessing_applied,
-            inference_time_ms: data.inference_time_ms,
-            has_processed_image: !!data.processed_image,
-            processed_image_length: data.processed_image?.length || 0
-        });
-
-        // If backend returned a processed image, display it
-        if (data.processed_image) {
-            console.log('🖼️ [DISPLAY] Processed image found, displaying...');
-            const displayCanvas = document.getElementById('canvas');
-            const displayCtx = displayCanvas.getContext('2d');
-
-            console.log(`🖼️ [DISPLAY] Canvas element: ${displayCanvas.width}x${displayCanvas.height}`);
-
-            const img = new Image();
-            img.onload = () => {
-                console.log('✅ [DISPLAY] Image loaded successfully');
-                // Clear canvas
-                displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
-
-                // Draw processed (blurred) image
-                displayCtx.drawImage(img, 0, 0, displayCanvas.width, displayCanvas.height);
-                console.log('✅ [DISPLAY] Blurred image drawn to canvas');
-
-                // Draw predictions on top of processed image
-                drawPredictionsOnContext(displayCtx, data.predictions);
-                console.log('✅ [DISPLAY] Predictions drawn');
-            };
-            img.onerror = (e) => {
-                console.error('❌ [DISPLAY] Failed to load image:', e);
-            };
-            img.src = 'data:image/jpeg;base64,' + data.processed_image;
-            console.log('🖼️ [DISPLAY] Image source set, waiting for onload...');
-        } else {
-            console.warn('⚠️ [DISPLAY] No processed image in response, using raw video');
-            // No processed image, just draw predictions on overlay canvas
-            drawPredictions(data.predictions);
-        }
+        // Draw predictions on raw (flipped) video feed
+        drawPredictions(data.predictions);
 
         // Update displays
         updateFingerCount(data.finger_count);
@@ -433,12 +365,9 @@ async function runInference(video) {
         // Update latency
         const latency = performance.now() - startTime;
         document.getElementById('latency').textContent = `Latency: ${Math.round(latency)}ms`;
-        console.log(`⏱️ [INFERENCE] Complete in ${Math.round(latency)}ms`);
 
     } catch (error) {
         console.error('❌ [INFERENCE] Error:', error);
-        console.error('❌ [INFERENCE] Stack:', error.stack);
-        // Don't show toast for every error to avoid spam
     }
 }
 
@@ -450,12 +379,45 @@ function drawPredictions(predictions) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw each prediction
-    drawPredictionsOnContext(ctx, predictions);
+    // Draw the raw video frame, horizontally flipped (mirror)
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // Draw bounding boxes (coordinates need to be flipped too)
+    if (predictions && predictions.length > 0) {
+        predictions.forEach(pred => {
+            const [x1, y1, x2, y2] = pred.bbox;
+            // Mirror x coordinates
+            const fx1 = canvas.width - x2;
+            const fx2 = canvas.width - x1;
+            const width = fx2 - fx1;
+            const height = y2 - y1;
+
+            // Draw bounding box
+            ctx.strokeStyle = '#00ff41';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(fx1, y1, width, height);
+
+            // Draw label background
+            const label = `${pred.class_name} ${(pred.confidence * 100).toFixed(1)}%`;
+            ctx.font = 'bold 16px Arial';
+            const textMetrics = ctx.measureText(label);
+            const textHeight = 20;
+
+            ctx.fillStyle = '#00ff41';
+            ctx.fillRect(fx1, y1 - textHeight - 4, textMetrics.width + 10, textHeight + 4);
+
+            // Draw label text
+            ctx.fillStyle = '#000';
+            ctx.fillText(label, fx1 + 5, y1 - 6);
+        });
+    }
 }
 
 function drawPredictionsOnContext(ctx, predictions) {
-    // Draw each prediction on the given context
+    // Draw each prediction on the given context (no flip — used for analysis)
     predictions.forEach(pred => {
         const [x1, y1, x2, y2] = pred.bbox;
         const width = x2 - x1;
@@ -521,13 +483,8 @@ function updateFPS() {
 
 async function loadCurrentModel() {
     try {
-        const response = await fetch(`${API_BASE_URL}/models/current`);
-
-        if (!response.ok) {
-            throw new Error('No model loaded');
-        }
-
-        currentModelInfo = await response.json();
+        const transport = getTransport();
+        currentModelInfo = await transport.loadCurrentModel();
         updateModelDisplay(currentModelInfo);
 
     } catch (error) {
@@ -561,15 +518,8 @@ async function loadModel(modelName, version) {
     try {
         showToast('Loading model...', 'info');
 
-        const response = await fetch(`${API_BASE_URL}/models/load?model_name=${modelName}&version=${version}`, {
-            method: 'POST'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load model');
-        }
-
-        const result = await response.json();
+        const transport = getTransport();
+        await transport.loadModel(modelName, version);
 
         showToast(`Model ${modelName} v${version} loaded successfully!`, 'success');
 
@@ -586,23 +536,13 @@ async function loadRunWeights(runId, artifactPath) {
     try {
         showToast(`Loading weights ${artifactPath}...`, 'info');
 
-        const response = await fetch(`${API_BASE_URL}/models/load_run_weights?run_id=${runId}&artifact_path=${artifactPath}`, {
-            method: 'POST'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load run weights');
-        }
-
-        const result = await response.json();
+        const transport = getTransport();
+        await transport.loadRunWeights(runId, artifactPath);
 
         showToast(`Loaded ${artifactPath} successfully!`, 'success');
 
         // Update current model info
         await loadCurrentModel();
-
-        // Switch to analysis tab to test? Or just stay.
-        // Let's stay but maybe scroll top?
 
     } catch (error) {
         console.error('Error loading run weights:', error);
@@ -624,6 +564,17 @@ function setSkipFrames(value) {
     }
 }
 
+function setConfThreshold(value) {
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+        confThreshold = parsed;
+        // Update the displayed value
+        const display = document.getElementById('confThresholdValue');
+        if (display) display.textContent = `${(parsed * 100).toFixed(0)}%`;
+        console.log(`✓ Confidence threshold set to: ${confThreshold}`);
+    }
+}
+
 // ============================================================================
 // Experiments Dashboard Page
 // ============================================================================
@@ -633,13 +584,8 @@ async function loadExperiments() {
     listEl.innerHTML = '<div class="loading">Loading experiments...</div>';
 
     try {
-        const response = await fetch(`${API_BASE_URL}/models/experiments`);
-
-        if (!response.ok) {
-            throw new Error('Failed to load experiments');
-        }
-
-        const experiments = await response.json();
+        const transport = getTransport();
+        const experiments = await transport.loadExperiments();
 
         if (experiments.length === 0) {
             listEl.innerHTML = '<p class="empty-state">No experiments found</p>';
@@ -737,6 +683,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('skipFrameInput').addEventListener('change', (e) => setSkipFrames(e.target.value));
     document.getElementById('refreshExperiments').addEventListener('click', loadExperiments);
+
+    // Confidence threshold slider
+    const confSlider = document.getElementById('confThresholdSlider');
+    if (confSlider) {
+        confSlider.addEventListener('input', (e) => setConfThreshold(e.target.value));
+    }
 
     console.log('✓ MLOps Frontend initialized');
 });

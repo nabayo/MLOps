@@ -33,6 +33,13 @@
                     <label for="skipFrameInput">Skip Frames:</label>
                     <input type="number" id="skipFrameInput" min="0" max="60" value="6" class="input-control">
                 </div>
+                <!-- Threshold Slider -->
+                <div class="control-group">
+                    <label for="confThresholdSlider">Confidence Threshold: <span
+                            id="confThresholdValue">15%</span></label>
+                    <input type="range" id="confThresholdSlider" min="0" max="1" step="0.05" value="0.15"
+                        class="slider-control">
+                </div>
             </div>
 
             <div class="inference-grid">
@@ -165,6 +172,8 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
+    <script src="config.js"></script>
+    <script src="comms.js"></script>
     <script src="app.js?v=999999999"></script>
 </body>
 

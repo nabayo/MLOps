@@ -16,7 +16,7 @@ from pathlib import Path
 import os
 import sys
 import time
-import base64
+
 import traceback
 import mlflow
 import tempfile
@@ -31,7 +31,15 @@ from dotenv import load_dotenv
 
 from mlflow.tracking import MlflowClient
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
@@ -143,6 +151,7 @@ class GlobalState:
         self.skip_frame_limit = 6
         self.frame_counter = 0
         self.last_prediction: Optional[PredictionResponse] = None
+        self.ws_conf_threshold: float = 0.15
         # Experiments cache
         self.experiments_cache: Optional[list[dict[str, Any]]] = None
         self.experiments_cache_time: float = 0.0
@@ -529,6 +538,18 @@ async def set_skip_frames(config: SkipFrameConfig):
     return {"status": "success", "skip_frames": state.skip_frame_limit}
 
 
+@app.post("/config/conf_threshold")
+async def set_conf_threshold(
+    threshold: float = Query(
+        ..., description="Confidence threshold (0.0–1.0)", ge=0.0, le=1.0
+    ),
+):
+    """Set the confidence threshold for WebSocket predictions."""
+    state.ws_conf_threshold = threshold
+    print(f"✓ Confidence threshold set to: {state.ws_conf_threshold}")
+    return {"status": "success", "conf_threshold": state.ws_conf_threshold}
+
+
 def check_run_weights(run_id: str) -> list[str]:
     """
     Check for available weights for a specific run.
@@ -632,6 +653,9 @@ async def load_run_weights(
 async def predict(
     file: UploadFile = File(...),
     skip_check: bool = Query(True, description="Whether to apply frame skipping logic"),
+    conf_threshold: float = Query(
+        0.15, description="Confidence threshold for predictions", ge=0.0, le=1.0
+    ),
 ):
     """
     Run inference on uploaded image.
@@ -698,7 +722,7 @@ async def predict(
 
         try:
             results = state.current_model.predict(
-                image, conf=0.15, iou=0.7, verbose=False
+                image, conf=conf_threshold, iou=0.7, verbose=False
             )
         except Exception as inf_error:
             print(f"❌ Inference failed: {inf_error}")
@@ -752,19 +776,12 @@ async def predict(
             f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms"
         )
 
-        # Encode processed image as base64 for frontend display
-        processed_image_b64 = None
-        if preprocessing_applied:
-            # Encode the processed image
-            _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            processed_image_b64 = base64.b64encode(buffer).decode("utf-8")
-
         response = PredictionResponse(
             finger_count=finger_count,
             predictions=predictions,
             preprocessing_applied=preprocessing_applied,
             inference_time_ms=round(inference_time, 2),
-            processed_image=processed_image_b64,
+            processed_image=None,
         )
 
         # Update global last prediction
@@ -792,6 +809,116 @@ async def get_metrics():
         "preprocessing_enabled": preprocessing_enabled,
         "skip_frames": state.skip_frame_limit,
     }
+
+
+@app.websocket("/ws/predict")
+async def ws_predict(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time inference.
+
+    Protocol:
+        Client sends: binary JPEG frame
+        Server sends: JSON PredictionResponse
+    """
+    await websocket.accept()
+    print("🔌 WebSocket client connected")
+
+    try:
+        while True:
+            # Receive binary JPEG data from client
+            data = await websocket.receive_bytes()
+
+            if state.current_model is None:
+                await websocket.send_json(
+                    {"error": "No model loaded", "finger_count": 0, "predictions": []}
+                )
+                continue
+
+            try:
+                # Decode image
+                nparr = np.frombuffer(data, np.uint8)
+                image = cv2.imdecode(  # pylint: disable=no-member
+                    nparr,
+                    cv2.IMREAD_COLOR,  # pylint: disable=no-member
+                )
+
+                if image is None:
+                    await websocket.send_json(
+                        {"error": "Invalid image", "finger_count": 0, "predictions": []}
+                    )
+                    continue
+
+                # Preprocessing
+                preprocessing_applied = False
+                if preprocessing_enabled:
+                    try:
+                        image = preprocess_image(image)
+                        preprocessing_applied = True
+                    except Exception:  # pylint: disable=broad-except
+                        pass
+
+                # Run inference
+                start_time = time.time()
+                results = state.current_model.predict(
+                    image, conf=state.ws_conf_threshold, iou=0.7, verbose=False
+                )
+                inference_time = (time.time() - start_time) * 1000
+
+                # Parse results
+                predictions = []
+                finger_count = 0
+
+                if len(results) > 0:
+                    result = results[0]
+                    if result.boxes is not None:
+                        for box in result.boxes:
+                            class_id = int(box.cls[0])
+                            class_name = result.names[class_id]
+                            confidence = float(box.conf[0])
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+                            predictions.append(
+                                {
+                                    "class_name": class_name,
+                                    "class_id": class_id,
+                                    "confidence": confidence,
+                                    "bbox": [x1, y1, x2, y2],
+                                }
+                            )
+
+                            try:
+                                if class_name.isdigit():
+                                    finger_count += int(class_name)
+                                elif "-" in class_name:
+                                    finger_count += int(class_name.split("-")[-1])
+                            except Exception:  # pylint: disable=broad-except
+                                finger_count += 1
+
+                await websocket.send_json(
+                    {
+                        "finger_count": finger_count,
+                        "predictions": predictions,
+                        "preprocessing_applied": preprocessing_applied,
+                        "inference_time_ms": round(inference_time, 2),
+                    }
+                )
+
+            except Exception as e:  # pylint: disable=broad-except
+                print(f"❌ WebSocket inference error: {e}")
+                await websocket.send_json(
+                    {
+                        "error": str(e),
+                        "finger_count": 0,
+                        "predictions": [],
+                        "preprocessing_applied": False,
+                        "inference_time_ms": 0,
+                    }
+                )
+
+    except WebSocketDisconnect:
+        print("🔌 WebSocket client disconnected")
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"❌ WebSocket connection error: {e}")
 
 
 if __name__ == "__main__":
