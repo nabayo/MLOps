@@ -1,5 +1,7 @@
 # YOLOv11 Finger Counting MLOps Platform
 
+Public github repository: https://github.com/nabayo/MLOps.
+
 This project implements an end-to-end MLOps pipeline for training, tracking, and serving a YOLOv11-based finger counting model. It leverages MLflow for experiment management, Docker for containerization, and provides a real-time web interface for inference.
 
 ## Architecture
