@@ -1,478 +1,119 @@
-# YOLOv11 Finger Counting - MLOps Platform
+# YOLOv11 Finger Counting MLOps Platform
 
-Production-grade MLOps platform for training, tracking, and serving YOLOv11 finger detection models with comprehensive experiment management.
+This project implements an end-to-end MLOps pipeline for training, tracking, and serving a YOLOv11-based finger counting model. It leverages MLflow for experiment management, Docker for containerization, and provides a real-time web interface for inference.
 
-## 🚀 Features
+## Architecture
 
-- **Complete MLOps Infrastructure**: MLflow for experiment tracking, model registry, and metadata storage
-- **Configurable Training Pipeline**: Modular YOLOv11 training with extensive hyperparameter configuration
-- **Dynamic Model Serving**: FastAPI backend with hot-swappable models from MLflow registry
-- **Real-time Web Dashboard**: 
-  - Live webcam inference with bounding box overlay
-  - Interactive model selection and switching
-  - Comprehensive experiments browser with metrics
-- **Modular Preprocessing**: Face blur using deface library (configurable)
-- **Self-hosted & Free**: 100% open-source, runs entirely in Docker
+The system is composed of the following services:
 
-## 📋 Table of Contents
+1.  **MLflow Tracking Server:** Centralized repository for experiment metadata, metrics, and parameters.
+2.  **PostgreSQL Database:** Backend storage for MLflow metadata.
+3.  **MinIO Object Storage:** S3-compatible storage for model artifacts (weights, plots).
+4.  **Training Pipeline:** Modular Python scripts for data preparation (from Picsellia), YOLOv11 training, and model evaluation.
+5.  **Serving API:** FastAPI application that dynamically loads models from the MLflow registry for inference.
+6.  **Frontend Web App:** Frontend interface for real-time webcam inference and experiment visualization, communicating with the backend via WebSocket and REST APIs.
 
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Training a Model](#training-a-model)
-- [Using the Web Dashboard](#using-the-web-dashboard)
-- [API Documentation](#api-documentation)
-- [Configuration](#configuration)
-- [Development](#development)
+## Prerequisites
 
-## 🏗️ Architecture
+-   Docker and Docker Compose
+-   Python 3.12+ (for local development)
+-   Picsellia API Token (required for dataset download)
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                   MLOps Platform                               │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ┌──────────────┐    ┌──────────────┐      ┌──────────────┐    │
-│  │   Training   │──▶│   MLflow     │◀────│   Serving    │    │
-│  │   Pipeline   │    │   Tracking   │      │     API      │    │
-│  └──────────────┘    └──────────────┘      └──────────────┘    │
-│         │                    │                    │            │
-│         │                    │                    │            │
-│         ▼                    ▼                    ▼            │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │  Picsellia   │    │  PostgreSQL  │    │    Web       │      │
-│  │   Dataset    │    │    MinIO     │    │  Dashboard   │      │
-│  └──────────────┘    └──────────────┘    └──────────────┘      │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
-```
+## Setup and Installation
 
-### Components
+1.  **Clone the repository:**
+    ```bash
+    git clone git@github.com:nabayo/MLOps.git
+    cd MLOps
+    ```
 
-1. **MLflow Server**: Experiment tracking, metrics logging, model registry
-2. **PostgreSQL**: MLflow backend store (experiments metadata)
-3. **MinIO**: S3-compatible artifact store (model weights, plots, logs)
-4. **Training Pipeline**: YOLOv11 training with comprehensive MLflow integration
-5. **Serving API**: FastAPI backend with dynamic model loading
-6. **Web Dashboard**: Real-time inference UI with experiment browser
+2.  **Configure Environment:**
+    Copy the example environment file and update variables as needed. (You can use the default ones without any issues).
+    ```bash
+    cp .env.example .env
+    ```
+    **If you want to start training:** Ensure there is a file in the root directory named `picsellia_token` containing your valid API token.
 
-## 🎯 Quick Start
+3.  **Start Services:**
+    Launch the full stack using Docker Compose.
+    ```bash
+    docker-compose up -d
+    ```
 
-### Prerequisites
+    Or launch it via the scripts:
 
-- Docker & Docker Compose
-- Python 3.12+ (for local development)
-- Picsellia API token (store in `picsellia_token` file)
+    **Linux/MacOS**
+    ```bash
+    ./scripts/serve.sh
+    ```
 
-### 1. Clone and Setup
+    **Windows**
+    ```powershell
+    ./scripts/serve.ps1
+    ```
 
-```bash
-git clone <your-repo>
-cd MLOps
+## Usage
 
-# Copy environment template
-cp .env.example .env
+### Web Dashboard
+Access the dashboard at `http://localhost:8080`.
 
-# Edit .env if needed (default values work for local development)
-nano .env
-```
+-   **Live Inference:** Use the webcam to perform real-time finger counting. Adjust confidence thresholds and frame skipping parameters.
+-   **Experiments / Model Selection:** Browse and load different model versions from the MLflow registry without restarting the server. View training history and metrics for all experiments.
+-   **Custom Image Upload:** Upload your own image to perform inference on that image.
 
-### 2. Start MLflow Infrastructure
+### Monitoring Experiments
 
-```bash
-# Start MLflow, PostgreSQL, and MinIO
-docker-compose up -d mlflow postgres minio
+With the docker up and running, you can access to:
 
-# Wait for services to be healthy (~30 seconds)
-docker-compose ps
+-   **MLflow UI:** `http://localhost:5000`
+-   **MinIO:** `http://localhost:9001`
 
-# Access MLflow UI
-open http://localhost:5000
-```
+### Training a Model
 
-### 3. Train Your First Model
+There are two config files for training:
+
+- `config.yaml`: Contain the dataset name, version and local target download path.
+- `training_config.yaml`: Contain the training parameters, like the number of epochs, batch size, model version, image augmentation parameters, etc.
+
+To start a training job using the Docker container:
 
 ```bash
-# Install dependencies (local development)
-pip install --ignore-installed -r requirements.txt
-
-# Set MLflow tracking URI
-export MLFLOW_TRACKING_URI=http://localhost:5000
-
-# Run training pipeline
-python main.py train --evaluate
-
-# Or use Docker
-docker-compose run --rm training
-```
-
-Training will:
-- ✅ Download dataset from Picsellia
-- ✅ Prepare data (convert to YOLO format, create splits 80/10/10)
-- ✅ Train YOLOv11 with configured hyperparameters
-- ✅ Log all metrics, parameters, and artifacts to MLflow
-- ✅ Register best model in MLflow Model Registry
-- ✅ Evaluate on test set
-
-### 4. Start Serving & Frontend
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Access the web dashboard
-open http://localhost:8080
-
-# Access API docs
-open http://localhost:8000/docs
-```
-
-## 🏋️ Training a Model
-
-### Configuration
-
-Edit `configs/training_config.yaml` to customize:
-
-```yaml
-model:
-  architecture: "yolo11n"  # yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
-  pretrained: true
-
-dataset:
-  split_ratios:
-    train: 0.8  # Configurable!
-    val: 0.1
-    test: 0.1
-  seed: 42
-  img_size: 640
-
-training:
-  epochs: 100
-  batch_size: 16
-  lr0: 0.01
-  # ... many more parameters
-
-augmentation:
-  fliplr: 0.5
-  mosaic: 1.0
-  # ... extensive augmentation options
-
-mlflow:
-  experiment_name: "yolov11-finger-counting"
-  auto_register: true
-  auto_promote_stage: "Staging"
-```
-
-### Run Training
-
-**Local (Recommended for Development)**:
-```bash
-# Basic training
-python main.py train
-
-# Training with evaluation
-python main.py train --evaluate
-
-# Custom config
-python main.py train --training-config configs/custom_config.yaml
-```
-
-**Docker (Production)**:
-```bash
-# Start training in background
 docker-compose up -d training
-
-# View logs
-docker-compose logs -f training
-
-# Stop after completion
-docker-compose down training
 ```
 
-### Monitor Training
+Or launch it via the scripts:
 
-1. **MLflow UI**: http://localhost:5000
-   - View real-time metrics
-   - Compare experiments
-   - Download artifacts
-
-2. **Logs**: Check console output for progress
-
-### Evaluation Only
-
+**Linux/MacOS**
 ```bash
-python main.py eval --model experiments/yolo11n_*/weights/best.pt
+./scripts/train.sh
 ```
 
-## 🌐 Using the Web Dashboard
-
-Access: http://localhost:8080
-
-### Page 1: Live Inference
-
-1. Click **"Start Camera"** to enable webcam
-2. Show your hand with different finger counts
-3. View:
-   - Real-time bounding boxes on video
-   - Total finger count (sum of all hands)
-   - FPS and latency stats
-   - Individual predictions list
-
-### Page 2: Model Selection
-
-1. Browse all registered models from MLflow
-2. View model versions with:
-   - Architecture (yolo11n, yolo11s, etc.)
-   - Stage (Production, Staging, Archived)
-   - Metrics (mAP@50-95, precision, recall)
-3. **Live Switch**: Click "Load Model" to switch without restart
-4. Currently loaded model shows in Live Inference page
-
-### Page 3: Experiments Dashboard
-
-1. View all MLflow experiments
-2. Browse runs with full metrics:
-   - Model architecture
-   - mAP@50-95, precision, recall
-   - Training date and status
-   - Hyperparameters
-3. Compare different training runs
-4. Click experiment in MLflow UI for detailed artifacts
-
-## 📡 API Documentation
-
-### Base URL
-
-```
-http://localhost:8000
-```
-
-### Endpoints
-
-#### Health Check
+**Windows**
 ```bash
-GET /health
+./scripts/train.ps1
 ```
 
-#### Get Current Model
-```bash
-GET /models/current
-```
+This process will:
+1.  Download the dataset from Picsellia.
+2.  Preprocess and split the data.
+3.  Train the YOLO model.
+4.  Log metrics and register the trained model in MLflow.
 
-#### List All Models
-```bash
-GET /models/list
-```
+### API Endpoints
+The backend API is available at `http://localhost:8000`.
 
-#### Load Model (Live Switching!)
-```bash
-POST /models/load?model_name=yolov11-finger-counting&version=1
-POST /models/load?model_name=yolov11-finger-counting&stage=Production
-```
+-   `GET /health`: Check service status.
+-   `GET /models/list`: List available models.
+-   `POST /models/load`: Load a specific model version.
+-   `POST /predict`: Perform inference on an uploaded image.
+-   `websocket /ws/predict`: Real-time inference stream.
 
-#### List Experiments
-```bash
-GET /models/experiments
-```
+Interactive documentation is available at `http://localhost:8000/docs`.
 
-#### Predict (Inference)
-```bash
-POST /predict
-Content-Type: multipart/form-data
-Body: file=<image>
+## Project Structure
 
-Response:
-{
-  "finger_count": 5,
-  "predictions": [
-    {
-      "class_name": "5",
-      "class_id": 4,
-      "confidence": 0.95,
-      "bbox": [100, 150, 200, 300]
-    }
-  ],
-  "preprocessing_applied": false,
-  "inference_time_ms": 45.2
-}
-```
-
-### Interactive API Docs
-
-Visit http://localhost:8000/docs for Swagger UI
-
-## ⚙️ Configuration
-
-### Dataset Configuration
-
-`configs/config.yaml`:
-```yaml
-dataset_name: "Photos Floutées"
-dataset_version: "new_version"
-dataset_download_path: "dataset/"
-```
-
-### Training Configuration
-
-See `configs/training_config.yaml` for:
-- ✅ Model architecture (easily switch yolo11n/s/m/l/x)
-- ✅ Dataset splits (configurable ratios)
-- ✅ Training hyperparameters
-- ✅ Data augmentation settings
-- ✅ MLflow experiment settings
-
-### Environment Variables
-
-`.env`:
-```bash
-# PostgreSQL
-POSTGRES_USER=mlflow
-POSTGRES_PASSWORD=mlflow_password
-
-# MinIO
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minio_password
-
-# Serving
-MODEL_NAME=yolov11-finger-counting
-MODEL_STAGE=Production
-ENABLE_PREPROCESSING=true  # Face blur
-```
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-MLOps/
-├── configs/
-│   ├── config.yaml              # Dataset configuration
-│   └── training_config.yaml     # Training hyperparameters
-├── src/
-│   ├── config.py                # Config loader
-│   ├── picsellia.py             # Dataset download
-│   ├── data_preparation.py      # Data prep & YOLO conversion
-│   ├── training.py              # Training with MLflow
-│   ├── evaluation.py            # Model evaluation
-│   └── preprocessing/
-│       ├── base.py              # Preprocessing pipeline
-│       └── face_blur.py         # Face anonymization
-├── serving/
-│   ├── api.py                   # FastAPI serving
-│   └── Dockerfile
-├── frontend/
-│   ├── index.html               # Web UI
-│   ├── app.js                   # JavaScript logic
-│   ├── style.css                # Premium styling
-│   ├── nginx.conf
-│   └── Dockerfile
-├── mlflow/
-│   └── Dockerfile               # MLflow server
-├── main.py                      # Pipeline orchestrator
-├── docker-compose.yml           # All services
-└── requirements.txt             # Dependencies
-```
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install --ignore-installed -r requirements.txt
-
-# Start only MLflow infrastructure
-docker-compose up -d mlflow postgres minio
-
-# Run training locally
-export MLFLOW_TRACKING_URI=http://localhost:5000
-python main.py train
-
-# Start serving locally
-MLFLOW_TRACKING_URI=http://localhost:5000 python serving/api.py
-
-# Serve frontend locally (simple HTTP server)
-cd frontend && python -m http.server 8080
-```
-
-## 🧪 Testing
-
-```bash
-# Run training with minimal config for testing
-python main.py train --training-config configs/test_config.yaml
-
-# Test API endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/models/list
-
-# Test inference
-curl -X POST -F "file=@test_image.jpg" http://localhost:8000/predict
-```
-
-## 📊 MLflow Features
-
-### What's Logged
-
-**Parameters**:
-- Model architecture (yolo11n, yolo11s, etc.)
-- All hyperparameters (epochs, batch size, lr, etc.)
-- Data augmentation settings
-- Dataset split ratios
-- Seed for reproducibility
-- GPU info
-
-**Metrics (per epoch)**:
-- mAP@50, mAP@50-95
-- Precision, Recall, F1
-- Box loss, class loss, DFL loss
-- Training and validation metrics
-
-**Artifacts**:
-- Model weights (best.pt, last.pt)
-- Confusion matrix
-- PR curves, F1 curves
-- Training curves (results.png)
-- Validation prediction samples
-- results.csv with all metrics
-
-**Model Registry**:
-- Automatic model registration
-- Version control
-- Stage management (Staging → Production)
-- Model metadata and tags
-
-## 🐛 Troubleshooting
-
-### MLflow UI not accessible
-```bash
-# Check if services are running
-docker-compose ps
-
-# Restart MLflow
-docker-compose restart mlflow
-
-# Check logs
-docker-compose logs mlflow
-```
-
-### Training fails with CUDA error
-Edit `training_config.yaml`:
-```yaml
-device:
-  device: "cpu"  # Force CPU if GPU issues
-```
-
-### No model in serving
-```bash
-# Check if model is registered
-curl http://localhost:8000/models/list
-
-# Manually load a model
-curl -X POST "http://localhost:8000/models/load?model_name=yolov11-finger-counting&stage=Staging"
-```
-
-### Webcam not working
-- Ensure HTTPS or localhost (browsers require secure context)
-- Check browser permissions
-- Try different browser (Chrome/Firefox recommended)
-
-## 📝 License
-
-TODO
+-   `src/`: Core logic for data preparation, training, and evaluation.
+-   `serving/`: FastAPI application code.
+-   `frontend/`: Web application source code.
+-   `configs/`: Configuration files for training hyperparameters and dataset settings.
+-   `mlflow/`: Docker configuration for the MLflow server.
