@@ -17,6 +17,7 @@ import json
 import zipfile
 import shutil
 import traceback
+import argparse
 
 from pathlib import Path
 from datetime import datetime
@@ -82,7 +83,7 @@ class MLflowImporter:
             return self.stats
 
         finally:
-            self._cleanup()
+            cleanup(self)
 
     def _print_header(self) -> None:
         print("=" * 70)
@@ -208,7 +209,8 @@ class MLflowImporter:
         self.client.set_terminated(run.info.run_id, end_status)
 
         print(
-            f"  ✓ Created: {run_name} ({self.stats.get('artifacts_uploaded_last_run', 0)} artifacts)"
+            f"  ✓ Created: {run_name}\
+                 ({self.stats.get('artifacts_uploaded_last_run', 0)} artifacts)"
         )
         self.stats["runs_created"] += 1
 
@@ -368,14 +370,15 @@ class MLflowImporter:
             f"{self.stats['artifacts_skipped']} skipped"
         )
 
-    def _cleanup(self) -> None:
-        if self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir)
+
+def cleanup(mlflow_imported: MLflowImporter) -> None:
+    """Cleanup the imported MLflow data."""
+    if mlflow_imported.temp_dir.exists():
+        shutil.rmtree(mlflow_imported.temp_dir)
 
 
 def main() -> None:
     """Main entry point."""
-    import argparse
 
     parser = argparse.ArgumentParser(
         description="Import MLflow data from a backup zip file"

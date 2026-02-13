@@ -17,6 +17,7 @@ import json
 import zipfile
 import shutil
 import traceback
+import argparse
 
 from pathlib import Path
 from datetime import datetime
@@ -95,7 +96,7 @@ class MLflowExporter:
             return str(self.zip_path)
 
         finally:
-            self._cleanup()
+            cleanup(self)
 
     def _export_experiments(self) -> None:
         """Export experiments metadata."""
@@ -244,15 +245,15 @@ class MLflowExporter:
                     arcname = file_path.relative_to(self.temp_dir)
                     zipf.write(file_path, arcname)
 
-    def _cleanup(self) -> None:
-        """Remove temporary directories."""
-        if self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir)
+
+def cleanup(mlflow_exported: MLflowExporter) -> None:
+    """Cleanup the exported MLflow data."""
+    if mlflow_exported.temp_dir.exists():
+        shutil.rmtree(mlflow_exported.temp_dir)
 
 
 def main() -> None:
     """Main entry point."""
-    import argparse
 
     parser = argparse.ArgumentParser(
         description="Export MLflow data to a backup zip file"

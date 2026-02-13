@@ -12,24 +12,19 @@ Features:
 from typing import Any, Optional
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
 import os
 import sys
 import time
-
-import traceback
-import mlflow
 import tempfile
-import uvicorn
-import numpy as np
+import traceback
+
 
 import cv2
-
-from ultralytics import YOLO
-from pydantic import BaseModel
-from dotenv import load_dotenv
-
-from mlflow.tracking import MlflowClient
+import uvicorn
+import numpy as np
 
 from fastapi import (
     FastAPI,
@@ -41,6 +36,11 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
+
+from ultralytics import YOLO
+
+import mlflow
+from mlflow.tracking import MlflowClient
 
 try:
     # Add parent directory to path if not already there
@@ -773,7 +773,10 @@ async def predict(
                         finger_count += 1  # Fallback
 
         print(
-            f"✓ Inference complete: {len(predictions)} predictions, finger_count={finger_count}, time={inference_time:.2f}ms"
+            f"✓ Inference complete: \
+                {len(predictions)} predictions, \
+                finger_count={finger_count},\
+                time={inference_time:.2f}ms"
         )
 
         response = PredictionResponse(
@@ -921,6 +924,12 @@ async def ws_predict(websocket: WebSocket):
         print(f"❌ WebSocket connection error: {e}")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main Entry Point"""
+
     # Run server
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

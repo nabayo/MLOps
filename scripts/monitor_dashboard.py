@@ -309,6 +309,10 @@ class Dashboard:
 
     # --- Registry Explorer ---
     def menu_registry(self):
+        """
+        Menu for exploring the MLflow registry.
+        """
+
         while True:
             print_sub("Registry Explorer")
             models = self.client.search_registered_models()
@@ -434,10 +438,15 @@ class Dashboard:
             input("\nPress Enter...")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point."""
     try:
         app = Dashboard()
         app.run()
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
