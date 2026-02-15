@@ -4,10 +4,11 @@ Public github repository: https://github.com/nabayo/MLOps.
 
 This project implements an end-to-end MLOps pipeline for training, tracking, and serving a YOLOv11-based finger counting model. It leverages MLflow for experiment management, Docker for containerization, and provides a real-time web interface for inference.
 
-## Latest Improvements
+## Latest Changes
 
 - Compared to the demo version presented in class, this version is more fluid because we used websockets instead than REST API calls.
 - We also stopped showing the blurred face from the camera to reduce data transfer: now we only send raw images from the webapp to the server (the server still blur the face before the inference), but the server only send the model predictions and no images anymore.
+- In the end, we did not have time to perform a series of unit tests to improve the coverage of our code.
 
 ## Architecture
 
