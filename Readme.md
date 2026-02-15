@@ -4,6 +4,11 @@ Public github repository: https://github.com/nabayo/MLOps.
 
 This project implements an end-to-end MLOps pipeline for training, tracking, and serving a YOLOv11-based finger counting model. It leverages MLflow for experiment management, Docker for containerization, and provides a real-time web interface for inference.
 
+## Latest Improvements
+
+- Compared to the demo version presented in class, this version is more fluid because we used websockets instead than REST API calls.
+- We also stopped showing the blurred face from the camera to reduce data transfer: now we only send raw images from the webapp to the server (the server still blur the face before the inference), but the server only send the model predictions and no images anymore.
+
 ## Architecture
 
 The system is composed of the following services:
@@ -35,6 +40,17 @@ The system is composed of the following services:
     cp .env.example .env
     ```
     **If you want to start training:** Ensure there is a file in the root directory named `picsellia_token` containing your valid API token.
+
+
+3. **Clean Previous Dockers** *(if you have other dockers named `mlops-...`)*:
+
+    You can clean docker with the following command:
+
+    ```bash
+    docker system prune -a --volumes
+    ```
+
+    But if you have other dockers, you may want to use a more precise command to only clean the `mlops-...` dockers.
 
 
 3. **Import backup**:

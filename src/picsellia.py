@@ -68,14 +68,14 @@ def load_data(config: dict[str, Any]) -> DatasetLoader:
 
         except Exception as e:  # pylint: disable=broad-except
             print(f"Warning: Failed to export YOLO annotations via SDK: {e}")
-            print("Falling back to manual JSON download.")
+            print("Falling back to manual JSON download for label extraction.")
 
-            # Get the regular annotations (for fallback/validation)
-            annotations: dict[str, Any] = dataset_version.load_annotations()
+        # Always download the regular annotations.json for meta-data and validation
+        print("Downloading annotations.json...")
+        annotations: dict[str, Any] = dataset_version.load_annotations()
 
-            # Save the annotations
-            with open(annotations_path, "w", encoding="utf-8") as f:
-                json.dump(annotations, f)
+        with open(annotations_path, "w", encoding="utf-8") as f:
+            json.dump(annotations, f)
 
     # Load the dataset
     dataset_loader: DatasetLoader = DatasetLoader(config)
